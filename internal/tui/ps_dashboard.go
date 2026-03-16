@@ -286,9 +286,9 @@ func (m psModel) renderTable(width, height int) string {
 		line := fmt.Sprintf("  %s %-14s %s  %s", num, name, padRight(status, 12, 10), profiles)
 
 		if i == m.cursor {
-			// Render selected row — apply highlight to the plain text parts
-			plainLine := fmt.Sprintf("  %-3d %-14s %-12s %s", i+1, name, p.status, profiles)
-			line = selectedStyle.Render(padToWidth(plainLine, width-2))
+			prefix := fmt.Sprintf("  %-3d %-14s ", i+1, name)
+			suffix := fmt.Sprintf("  %s", profiles)
+			line = selectedStyle.Render(prefix) + padRight(status, 12, 10) + selectedStyle.Render(padToWidth(suffix, width-2-len(prefix)-12))
 		}
 
 		b.WriteString(line + "\n")
