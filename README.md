@@ -9,6 +9,11 @@ Like [ClaudeBox](https://github.com/RchGrav/claudebox), but with real VM isolati
 ## Install
 
 ```bash
+# Homebrew (macOS/Linux)
+brew install TomHoenderdos/tap/vbox
+
+# Or download binary directly:
+
 # macOS Apple Silicon
 curl -L https://github.com/TomHoenderdos/vbox/releases/latest/download/vbox-darwin-arm64 -o vbox
 chmod +x vbox && mv vbox ~/.local/bin/
