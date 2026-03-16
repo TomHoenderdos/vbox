@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/TomHoenderdos/vbox/internal/config"
 	"github.com/TomHoenderdos/vbox/internal/vagrant"
@@ -26,6 +27,7 @@ type project struct {
 type batchOutputMsg struct{ lines []string }
 type commandDoneMsg struct{ err error }
 type refreshMsg struct{}
+type tickMsg struct{}
 type statusUpdateMsg struct {
 	index  int
 	status string
@@ -41,7 +43,10 @@ type psModel struct {
 	width     int
 	height    int
 	quitting  bool
+	dotTick   int
 }
+
+var dotFrames = [3]string{".", "..", "..."}
 
 var (
 	greenDot    = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
@@ -136,9 +141,14 @@ func newPsModel() psModel {
 	}
 }
 
+func tickCmd() tea.Cmd {
+	return tea.Tick(300*time.Millisecond, func(t time.Time) tea.Msg {
+		return tickMsg{}
+	})
+}
+
 func (m psModel) Init() tea.Cmd {
-	// Kick off parallel status checks immediately
-	return fetchAllStatuses(m.projects)
+	return tea.Batch(fetchAllStatuses(m.projects), tickCmd())
 }
 
 func (m psModel) selectedProject() *project {
@@ -203,6 +213,16 @@ func (m psModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.output.Width = rightWidth
 		m.output.Height = paneH - 4
+		return m, nil
+
+	case tickMsg:
+		m.dotTick++
+		// Keep ticking if any project is still loading
+		for _, p := range m.projects {
+			if p.status == "..." {
+				return m, tickCmd()
+			}
+		}
 		return m, nil
 
 	case batchStatusMsg:
@@ -337,32 +357,37 @@ func (m psModel) renderTable(width, height int) string {
 			profiles = ""
 		}
 
+		dots := dimText.Render(fmt.Sprintf("  %-9s", dotFrames[m.dotTick%3]))
+		selDots := selDim.Render(fmt.Sprintf("  %-9s", dotFrames[m.dotTick%3]))
+
 		if i == m.cursor {
-			// Selected row: entire row gets highlight background
 			var statusStr string
+			visLen := 10
 			if p.status == "running" {
 				statusStr = selGreen.Render("● running")
 			} else if p.status == "..." {
-				statusStr = selDim.Render("  ...")
+				statusStr = selDots
+				visLen = 11
 			} else {
 				statusStr = selDim.Render("○ stopped")
 			}
 			prefix := selStyle.Render(fmt.Sprintf("  %s %-14s ", num, name))
-			statusPad := selStyle.Render(strings.Repeat(" ", 2)) // pad after status
+			statusPad := selStyle.Render(strings.Repeat(" ", 12-visLen))
 			suffix := selStyle.Render(padToWidth(fmt.Sprintf("  %s", profiles), w-32))
 			line := prefix + statusStr + statusPad + suffix
 			b.WriteString(line + "\n")
 		} else {
-			// Normal row
 			var statusStr string
+			visLen := 10
 			if p.status == "running" {
 				statusStr = greenDot.Render("●") + " " + greenText.Render("running")
 			} else if p.status == "..." {
-				statusStr = dimDot.Render("  ...")
+				statusStr = dots
+				visLen = 11
 			} else {
 				statusStr = dimDot.Render("○") + " " + dimText.Render("stopped")
 			}
-			line := fmt.Sprintf("  %s %-14s %s  %s", num, name, padRight(statusStr, 12, 10), profiles)
+			line := fmt.Sprintf("  %s %-14s %s  %s", num, name, padRight(statusStr, 12, visLen), profiles)
 			b.WriteString(line + "\n")
 		}
 	}
