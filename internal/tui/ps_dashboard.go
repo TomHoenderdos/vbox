@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/TomHoenderdos/vbox/internal/config"
 	"github.com/TomHoenderdos/vbox/internal/vagrant"
@@ -25,6 +26,10 @@ type project struct {
 type batchOutputMsg struct{ lines []string }
 type commandDoneMsg struct{ err error }
 type refreshMsg struct{}
+type statusUpdateMsg struct {
+	index  int
+	status string
+}
 
 type psModel struct {
 	projects  []project
@@ -39,21 +44,24 @@ type psModel struct {
 }
 
 var (
-	greenDot  = lipgloss.NewStyle().Foreground(lipgloss.Color("42")).Render("●")
-	dimDot    = lipgloss.NewStyle().Faint(true).Render("○")
-	greenText = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
-	dimText   = lipgloss.NewStyle().Faint(true)
-	boldText  = lipgloss.NewStyle().Bold(true)
+	greenDot    = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
+	dimDot      = lipgloss.NewStyle().Faint(true)
+	greenText   = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
+	dimText     = lipgloss.NewStyle().Faint(true)
+	boldText    = lipgloss.NewStyle().Bold(true)
 	headerStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("240"))
-	selectedStyle = lipgloss.NewStyle().Background(lipgloss.Color("57")).Foreground(lipgloss.Color("229"))
-	paneStyle = lipgloss.NewStyle().
+	selStyle    = lipgloss.NewStyle().Background(lipgloss.Color("57")).Foreground(lipgloss.Color("229"))
+	selGreen    = lipgloss.NewStyle().Background(lipgloss.Color("57")).Foreground(lipgloss.Color("42"))
+	selDim      = lipgloss.NewStyle().Background(lipgloss.Color("57")).Foreground(lipgloss.Color("243"))
+	paneStyle   = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(lipgloss.Color("240")).
 			Padding(0, 1)
 	helpStyle = lipgloss.NewStyle().Faint(true)
 )
 
-func loadProjects() []project {
+// loadProjectsQuick loads project configs without checking vagrant status.
+func loadProjectsQuick() []project {
 	var projects []project
 	pattern := filepath.Join(config.ProjectsDir(), "*", config.ConfFile)
 	matches, _ := filepath.Glob(pattern)
@@ -64,19 +72,59 @@ func loadProjects() []project {
 		if err != nil {
 			continue
 		}
-
-		status := "stopped"
-		if s, err := vagrant.Status(dir); err == nil && s == "running" {
-			status = "running"
-		}
-
-		projects = append(projects, project{dir: dir, config: cfg, status: status})
+		projects = append(projects, project{dir: dir, config: cfg, status: "..."})
 	}
 	return projects
 }
 
+// fetchStatusCmd returns a tea.Cmd that checks vagrant status for a project.
+func fetchStatusCmd(index int, dir string) tea.Cmd {
+	return func() tea.Msg {
+		status := "stopped"
+		if s, err := vagrant.Status(dir); err == nil && s == "running" {
+			status = "running"
+		}
+		return statusUpdateMsg{index: index, status: status}
+	}
+}
+
+// fetchAllStatuses returns a tea.Cmd that checks all projects in parallel.
+func fetchAllStatuses(projects []project) tea.Cmd {
+	return func() tea.Msg {
+		type result struct {
+			index  int
+			status string
+		}
+
+		results := make([]result, len(projects))
+		var wg sync.WaitGroup
+		for i, p := range projects {
+			wg.Add(1)
+			go func(idx int, dir string) {
+				defer wg.Done()
+				status := "stopped"
+				if s, err := vagrant.Status(dir); err == nil && s == "running" {
+					status = "running"
+				}
+				results[idx] = result{index: idx, status: status}
+			}(i, p.dir)
+		}
+		wg.Wait()
+
+		// Return first result, queue the rest — actually just batch them
+		// We'll use a custom message for batch updates
+		statuses := make(map[int]string)
+		for _, r := range results {
+			statuses[r.index] = r.status
+		}
+		return batchStatusMsg(statuses)
+	}
+}
+
+type batchStatusMsg map[int]string
+
 func newPsModel() psModel {
-	projects := loadProjects()
+	projects := loadProjectsQuick()
 	vp := viewport.New(40, 20)
 	vp.SetContent("")
 
@@ -89,7 +137,8 @@ func newPsModel() psModel {
 }
 
 func (m psModel) Init() tea.Cmd {
-	return nil
+	// Kick off parallel status checks immediately
+	return fetchAllStatuses(m.projects)
 }
 
 func (m psModel) selectedProject() *project {
@@ -156,25 +205,34 @@ func (m psModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.output.Height = paneH - 4
 		return m, nil
 
+	case batchStatusMsg:
+		for idx, status := range msg {
+			if idx >= 0 && idx < len(m.projects) {
+				m.projects[idx].status = status
+			}
+		}
+		return m, nil
+
 	case batchOutputMsg:
 		for _, line := range msg.lines {
 			m.appendOutput(line)
 		}
 		m.running = false
-		m.projects = loadProjects()
-		return m, nil
+		// Reload projects and fetch statuses in parallel
+		m.projects = loadProjectsQuick()
+		return m, fetchAllStatuses(m.projects)
 
 	case commandDoneMsg:
 		m.running = false
 		if msg.err != nil {
 			m.appendOutput(fmt.Sprintf("Error: %v", msg.err))
 		}
-		m.projects = loadProjects()
-		return m, nil
+		m.projects = loadProjectsQuick()
+		return m, fetchAllStatuses(m.projects)
 
 	case refreshMsg:
-		m.projects = loadProjects()
-		return m, tea.ClearScreen
+		m.projects = loadProjectsQuick()
+		return m, tea.Batch(tea.ClearScreen, fetchAllStatuses(m.projects))
 
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -260,38 +318,52 @@ func leftPaneWidth(termWidth int) int {
 
 func (m psModel) renderTable(width, height int) string {
 	var b strings.Builder
+	w := width - 2 // account for pane padding
 
 	// Header
 	header := fmt.Sprintf(" %-3s %-14s %-12s %s", "#", "Project", "Status", "Profiles")
-	if len(header) > width {
-		header = header[:width]
+	if len(header) > w {
+		header = header[:w]
 	}
 	b.WriteString(headerStyle.Render(header) + "\n")
-	b.WriteString(headerStyle.Render(strings.Repeat("─", width-2)) + "\n")
+	b.WriteString(headerStyle.Render(strings.Repeat("─", w)) + "\n")
 
 	// Rows
 	for i, p := range m.projects {
 		num := fmt.Sprintf("%-3d", i+1)
 		name := truncate(p.config.Name, 14)
-		profiles := truncate(strings.Join(p.config.Profiles, " "), width-35)
-
-		var status string
-		if p.status == "running" {
-			status = greenDot + " " + greenText.Render("running")
-		} else {
-			status = dimDot + " " + dimText.Render("stopped")
+		profiles := truncate(strings.Join(p.config.Profiles, " "), w-35)
+		if w-35 < 0 {
+			profiles = ""
 		}
-
-		// Pad name and profiles to fixed widths (using visible chars only)
-		line := fmt.Sprintf("  %s %-14s %s  %s", num, name, padRight(status, 12, 10), profiles)
 
 		if i == m.cursor {
-			prefix := fmt.Sprintf("  %-3d %-14s ", i+1, name)
-			suffix := fmt.Sprintf("  %s", profiles)
-			line = selectedStyle.Render(prefix) + padRight(status, 12, 10) + selectedStyle.Render(padToWidth(suffix, width-2-len(prefix)-12))
+			// Selected row: entire row gets highlight background
+			var statusStr string
+			if p.status == "running" {
+				statusStr = selGreen.Render("● running")
+			} else if p.status == "..." {
+				statusStr = selDim.Render("  ...")
+			} else {
+				statusStr = selDim.Render("○ stopped")
+			}
+			prefix := selStyle.Render(fmt.Sprintf("  %s %-14s ", num, name))
+			suffix := selStyle.Render(padToWidth(fmt.Sprintf("  %s", profiles), w-32))
+			line := prefix + padRight(statusStr, 12, 10) + suffix
+			b.WriteString(line + "\n")
+		} else {
+			// Normal row
+			var statusStr string
+			if p.status == "running" {
+				statusStr = greenDot.Render("●") + " " + greenText.Render("running")
+			} else if p.status == "..." {
+				statusStr = dimDot.Render("  ...")
+			} else {
+				statusStr = dimDot.Render("○") + " " + dimText.Render("stopped")
+			}
+			line := fmt.Sprintf("  %s %-14s %s  %s", num, name, padRight(statusStr, 12, 10), profiles)
+			b.WriteString(line + "\n")
 		}
-
-		b.WriteString(line + "\n")
 	}
 
 	// Fill remaining height
@@ -315,6 +387,9 @@ func padRight(s string, targetVisible, visibleLen int) string {
 }
 
 func padToWidth(s string, width int) string {
+	if width <= 0 {
+		return ""
+	}
 	if len(s) >= width {
 		return s[:width]
 	}
@@ -322,6 +397,9 @@ func padToWidth(s string, width int) string {
 }
 
 func truncate(s string, maxLen int) string {
+	if maxLen <= 0 {
+		return ""
+	}
 	if len(s) <= maxLen {
 		return s
 	}
@@ -391,7 +469,23 @@ func RunPsDashboard() error {
 
 // PrintPlainPS prints a non-interactive table of projects.
 func PrintPlainPS() {
-	projects := loadProjects()
+	projects := loadProjectsQuick()
+
+	// Fetch statuses in parallel
+	var wg sync.WaitGroup
+	for i := range projects {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			if s, err := vagrant.Status(projects[idx].dir); err == nil && s == "running" {
+				projects[idx].status = "running"
+			} else {
+				projects[idx].status = "stopped"
+			}
+		}(i)
+	}
+	wg.Wait()
+
 	fmt.Printf("%-20s %-20s %-30s  %s\n", "PROJECT", "PROFILES", "PORTS", "STATUS")
 	fmt.Printf("%-20s %-20s %-30s  %s\n", "-------", "--------", "-----", "------")
 
