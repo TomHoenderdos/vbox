@@ -13,9 +13,9 @@ cat <<'PROVISION'
       su - vagrant -c 'git clone https://github.com/asdf-vm/asdf.git ~/.asdf --branch v0.14.0'
     fi
 
-    # Install Node.js and Claude Code
+    # Install Claude Code
     apt-get install -y nodejs npm
-    npm install -g @anthropic-ai/claude-code --no-audit
+    su - vagrant -c 'curl -fsSL https://claude.ai/install.sh | sh'
 
     # Install GitHub CLI
     curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
@@ -46,6 +46,8 @@ dirs = settings.get('trustedDirectories', [])
 if '/vagrant' not in dirs:
     dirs.append('/vagrant')
 settings['trustedDirectories'] = dirs
+# Disable plugins that have hooks incompatible with VM environment
+settings.pop('enabledPlugins', None)
 with open(path, 'w') as f:
     json.dump(settings, f, indent=2)
 "

@@ -17,6 +17,16 @@ func Run(dir string, args ...string) error {
 	return cmd.Run()
 }
 
+// RunSilentInput executes a vagrant command with piped stdin and captures output.
+func RunSilentInput(dir string, input string, args ...string) error {
+	cmd := exec.Command("vagrant", args...)
+	cmd.Dir = dir
+	cmd.Stdin = strings.NewReader(input)
+	cmd.Stdout = nil
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
 // RunSilent executes a vagrant command and captures its output.
 func RunSilent(dir string, args ...string) (string, error) {
 	cmd := exec.Command("vagrant", args...)
