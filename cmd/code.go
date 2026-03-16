@@ -2,12 +2,10 @@ package cmd
 
 import (
 	"fmt"
-	"os"
-	"os/exec"
 	"strings"
-	"syscall"
 
 	"github.com/TomHoenderdos/vbox/internal/config"
+	"github.com/TomHoenderdos/vbox/internal/vagrant"
 	"github.com/spf13/cobra"
 )
 
@@ -17,15 +15,6 @@ var codeCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		root, _, err := config.FindAndLoad()
 		if err != nil {
-			return err
-		}
-
-		vagrantBin, err := exec.LookPath("vagrant")
-		if err != nil {
-			return err
-		}
-
-		if err := os.Chdir(root); err != nil {
 			return err
 		}
 
@@ -65,7 +54,7 @@ if os.path.exists(cj):
 " && cd /vagrant && claude --dangerously-skip-permissions`
 
 		fmt.Println("==> Claude Code credentials synced to VM")
-		return syscall.Exec(vagrantBin, []string{"vagrant", "ssh", "-c", script}, os.Environ())
+		return vagrant.ExecReplace(root, "ssh", "-c", script)
 	},
 }
 

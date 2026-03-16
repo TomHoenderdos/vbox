@@ -1,10 +1,6 @@
 package cmd
 
 import (
-	"os"
-	"os/exec"
-	"syscall"
-
 	"github.com/TomHoenderdos/vbox/internal/config"
 	"github.com/TomHoenderdos/vbox/internal/vagrant"
 	"github.com/spf13/cobra"
@@ -22,14 +18,7 @@ var logsCmd = &cobra.Command{
 		}
 
 		if logsFollow {
-			vagrantBin, err := exec.LookPath("vagrant")
-			if err != nil {
-				return err
-			}
-			if err := os.Chdir(root); err != nil {
-				return err
-			}
-			return syscall.Exec(vagrantBin, []string{"vagrant", "ssh", "-c", "sudo journalctl -f"}, os.Environ())
+			return vagrant.ExecReplace(root, "ssh", "-c", "sudo journalctl -f")
 		}
 
 		return vagrant.Run(root, "ssh", "-c", "sudo journalctl --no-pager -n 100")

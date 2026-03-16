@@ -1,11 +1,8 @@
 package cmd
 
 import (
-	"os"
-	"os/exec"
-	"syscall"
-
 	"github.com/TomHoenderdos/vbox/internal/config"
+	"github.com/TomHoenderdos/vbox/internal/vagrant"
 	"github.com/spf13/cobra"
 )
 
@@ -18,16 +15,7 @@ var sshCmd = &cobra.Command{
 			return err
 		}
 
-		vagrantBin, err := exec.LookPath("vagrant")
-		if err != nil {
-			return err
-		}
-
-		if err := os.Chdir(root); err != nil {
-			return err
-		}
-
-		return syscall.Exec(vagrantBin, []string{"vagrant", "ssh"}, os.Environ())
+		return vagrant.ExecReplace(root, "ssh")
 	},
 }
 
