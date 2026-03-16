@@ -262,9 +262,12 @@ func (m psModel) renderTable(width, height int) string {
 	var b strings.Builder
 
 	// Header
-	header := fmt.Sprintf("  %-3s %-14s %-12s %s", "#", "Project", "Status", "Profiles")
+	header := fmt.Sprintf(" %-3s %-14s %-12s %s", "#", "Project", "Status", "Profiles")
+	if len(header) > width {
+		header = header[:width]
+	}
 	b.WriteString(headerStyle.Render(header) + "\n")
-	b.WriteString(headerStyle.Render(strings.Repeat("─", width)) + "\n")
+	b.WriteString(headerStyle.Render(strings.Repeat("─", width-2)) + "\n")
 
 	// Rows
 	for i, p := range m.projects {
