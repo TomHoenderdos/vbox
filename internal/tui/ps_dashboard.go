@@ -288,7 +288,7 @@ func (m psModel) renderTable(width, height int) string {
 		if i == m.cursor {
 			// Render selected row — apply highlight to the plain text parts
 			plainLine := fmt.Sprintf("  %-3d %-14s %-12s %s", i+1, name, p.status, profiles)
-			line = selectedStyle.Render(padToWidth(plainLine, width))
+			line = selectedStyle.Render(padToWidth(plainLine, width-2))
 		}
 
 		b.WriteString(line + "\n")
