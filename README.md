@@ -20,6 +20,13 @@ chmod +x vbox && mv vbox ~/.local/bin/
 # Linux ARM64
 curl -L https://github.com/TomHoenderdos/vbox/releases/latest/download/vbox-linux-arm64 -o vbox
 chmod +x vbox && sudo mv vbox /usr/local/bin/
+
+# Linux AMD64
+curl -L https://github.com/TomHoenderdos/vbox/releases/latest/download/vbox-linux-amd64 -o vbox
+chmod +x vbox && sudo mv vbox /usr/local/bin/
+
+# Windows (PowerShell)
+Invoke-WebRequest -Uri "https://github.com/TomHoenderdos/vbox/releases/latest/download/vbox-windows-amd64.exe" -OutFile "$env:LOCALAPPDATA\vbox.exe"
 ```
 
 Requires [Vagrant](https://www.vagrantup.com/) and a VM provider ([Parallels](https://www.parallels.com/), VirtualBox, etc).
