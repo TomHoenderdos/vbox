@@ -53,16 +53,19 @@ func buildTable(projects []project) table.Model {
 	columns := []table.Column{
 		{Title: "#", Width: 3},
 		{Title: "Project", Width: 18},
-		{Title: "Status", Width: 12},
+		{Title: "Status", Width: 22},
 		{Title: "Profiles", Width: 20},
 		{Title: "Ports", Width: 30},
 	}
 
+	greenStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
+	dimStyle := lipgloss.NewStyle().Faint(true)
+
 	var rows []table.Row
 	for i, p := range projects {
-		statusIcon := "○ stopped"
+		statusIcon := dimStyle.Render("○ stopped")
 		if p.status == "running" {
-			statusIcon = "● running"
+			statusIcon = greenStyle.Render("● running")
 		}
 
 		var portSummary []string
@@ -119,7 +122,7 @@ func (m psModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case refreshMsg:
 		m.projects = loadProjects()
 		m.table = buildTable(m.projects)
-		return m, nil
+		return m, tea.ClearScreen
 
 	case tea.KeyMsg:
 		switch msg.String() {
