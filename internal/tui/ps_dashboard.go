@@ -10,7 +10,6 @@ import (
 
 	"github.com/TomHoenderdos/vbox/internal/config"
 	"github.com/TomHoenderdos/vbox/internal/vagrant"
-	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -23,23 +22,36 @@ type project struct {
 }
 
 // Messages
-type outputLineMsg string
+type batchOutputMsg struct{ lines []string }
 type commandDoneMsg struct{ err error }
 type refreshMsg struct{}
 
 type psModel struct {
-	table      table.Model
-	projects   []project
-	output     viewport.Model
-	outputLog  []string
-	running    bool
-	cmdLabel   string
-	width      int
-	height     int
-	quitting   bool
-	tableStyle lipgloss.Style
-	paneStyle  lipgloss.Style
+	projects  []project
+	cursor    int
+	output    viewport.Model
+	outputLog []string
+	running   bool
+	cmdLabel  string
+	width     int
+	height    int
+	quitting  bool
 }
+
+var (
+	greenDot  = lipgloss.NewStyle().Foreground(lipgloss.Color("42")).Render("●")
+	dimDot    = lipgloss.NewStyle().Faint(true).Render("○")
+	greenText = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
+	dimText   = lipgloss.NewStyle().Faint(true)
+	boldText  = lipgloss.NewStyle().Bold(true)
+	headerStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("240"))
+	selectedStyle = lipgloss.NewStyle().Background(lipgloss.Color("57")).Foreground(lipgloss.Color("229"))
+	paneStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("240")).
+			Padding(0, 1)
+	helpStyle = lipgloss.NewStyle().Faint(true)
+)
 
 func loadProjects() []project {
 	var projects []project
@@ -63,72 +75,16 @@ func loadProjects() []project {
 	return projects
 }
 
-func buildTable(projects []project, height int) table.Model {
-	columns := []table.Column{
-		{Title: "#", Width: 3},
-		{Title: "Project", Width: 16},
-		{Title: "Status", Width: 20},
-		{Title: "Profiles", Width: 16},
-	}
-
-	greenStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
-	dimStyle := lipgloss.NewStyle().Faint(true)
-
-	var rows []table.Row
-	for i, p := range projects {
-		statusIcon := dimStyle.Render("○ stopped")
-		if p.status == "running" {
-			statusIcon = greenStyle.Render("● running")
-		}
-
-		rows = append(rows, table.Row{
-			fmt.Sprintf("%d", i+1),
-			p.config.Name,
-			statusIcon,
-			strings.Join(p.config.Profiles, " "),
-		})
-	}
-
-	h := len(rows) + 1
-	if height > 3 && h > height-3 {
-		h = height - 3
-	}
-
-	t := table.New(
-		table.WithColumns(columns),
-		table.WithRows(rows),
-		table.WithFocused(true),
-		table.WithHeight(h),
-	)
-
-	s := table.DefaultStyles()
-	s.Header = s.Header.BorderStyle(lipgloss.NormalBorder()).BorderForeground(lipgloss.Color("240")).BorderBottom(true)
-	s.Selected = s.Selected.Foreground(lipgloss.Color("229")).Background(lipgloss.Color("57")).Bold(false)
-	t.SetStyles(s)
-
-	return t
-}
-
 func newPsModel() psModel {
 	projects := loadProjects()
-
 	vp := viewport.New(40, 20)
 	vp.SetContent("")
 
 	return psModel{
-		table:    buildTable(projects, 20),
 		projects: projects,
 		output:   vp,
 		width:    120,
 		height:   24,
-		tableStyle: lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("240")).
-			Padding(0, 1),
-		paneStyle: lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("240")).
-			Padding(0, 1),
 	}
 }
 
@@ -137,53 +93,12 @@ func (m psModel) Init() tea.Cmd {
 }
 
 func (m psModel) selectedProject() *project {
-	idx := m.table.Cursor()
-	if idx >= 0 && idx < len(m.projects) {
-		return &m.projects[idx]
+	if m.cursor >= 0 && m.cursor < len(m.projects) {
+		return &m.projects[m.cursor]
 	}
 	return nil
 }
 
-// runCommand starts a command in the background, streaming output line by line.
-func runCommand(dir string, args ...string) tea.Cmd {
-	return func() tea.Msg {
-		cmd := exec.Command(args[0], args[1:]...)
-		cmd.Dir = dir
-
-		// Combine stdout and stderr
-		stdout, _ := cmd.StdoutPipe()
-		cmd.Stderr = cmd.Stdout
-
-		if err := cmd.Start(); err != nil {
-			return commandDoneMsg{err: err}
-		}
-
-		// Read output in a goroutine — but we can't send tea.Msg from here
-		// Instead, return the first approach: read all output via pipe
-		// We'll use a different pattern: return a batch of commands
-		go func() {
-			cmd.Wait()
-		}()
-
-		// Actually, we need to stream. Let's use a different approach.
-		// We'll read lines and the program will poll via channel.
-		scanner := bufio.NewScanner(stdout)
-		var lines []string
-		for scanner.Scan() {
-			lines = append(lines, scanner.Text())
-		}
-		cmd.Wait()
-
-		// Return all lines at once (simpler than true streaming for now)
-		return batchOutputMsg{lines: lines}
-	}
-}
-
-type batchOutputMsg struct {
-	lines []string
-}
-
-// streamCommand starts a command and streams output line by line via a channel.
 func streamCommand(dir string, args ...string) tea.Cmd {
 	return func() tea.Msg {
 		cmd := exec.Command(args[0], args[1:]...)
@@ -224,32 +139,21 @@ func (m *psModel) clearOutput() {
 	m.output.SetContent("")
 }
 
-func (m *psModel) recalcLayout() {
-	// Left pane: table, Right pane: output
-	// Account for borders (2 each side) and padding (1 each side) = 4 per pane, plus 1 gap
-	leftWidth := 62
-	rightWidth := m.width - leftWidth - 1
-	if rightWidth < 20 {
-		rightWidth = 20
-	}
-
-	paneHeight := m.height - 4 // room for help bar
-	if paneHeight < 5 {
-		paneHeight = 5
-	}
-
-	m.output.Width = rightWidth - 4
-	m.output.Height = paneHeight - 2
-
-	m.table = buildTable(m.projects, paneHeight-2)
-}
-
 func (m psModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		m.recalcLayout()
+		rightWidth := m.width - leftPaneWidth(m.width) - 5
+		if rightWidth < 10 {
+			rightWidth = 10
+		}
+		paneH := m.height - 4
+		if paneH < 3 {
+			paneH = 3
+		}
+		m.output.Width = rightWidth
+		m.output.Height = paneH - 4
 		return m, nil
 
 	case batchOutputMsg:
@@ -257,9 +161,7 @@ func (m psModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.appendOutput(line)
 		}
 		m.running = false
-		// Refresh project status after command completes
 		m.projects = loadProjects()
-		m.table = buildTable(m.projects, m.height-6)
 		return m, nil
 
 	case commandDoneMsg:
@@ -268,14 +170,29 @@ func (m psModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.appendOutput(fmt.Sprintf("Error: %v", msg.err))
 		}
 		m.projects = loadProjects()
-		m.table = buildTable(m.projects, m.height-6)
 		return m, nil
+
+	case refreshMsg:
+		m.projects = loadProjects()
+		return m, tea.ClearScreen
 
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "q", "esc":
+		case "q", "esc", "ctrl+c":
 			m.quitting = true
 			return m, tea.Quit
+
+		case "up", "k":
+			if m.cursor > 0 {
+				m.cursor--
+			}
+			return m, nil
+
+		case "down", "j":
+			if m.cursor < len(m.projects)-1 {
+				m.cursor++
+			}
+			return m, nil
 
 		case "u":
 			if p := m.selectedProject(); p != nil && !m.running {
@@ -299,7 +216,6 @@ func (m psModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "s":
 			if p := m.selectedProject(); p != nil {
-				// SSH needs a real terminal — use ExecProcess
 				c := exec.Command("vagrant", "ssh")
 				c.Dir = p.dir
 				return m, tea.ExecProcess(c, func(err error) tea.Msg {
@@ -309,7 +225,6 @@ func (m psModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "c":
 			if p := m.selectedProject(); p != nil {
-				// Claude Code needs a real terminal — use ExecProcess
 				c := exec.Command("vagrant", "ssh", "-c", "cd /vagrant && claude --dangerously-skip-permissions")
 				c.Dir = p.dir
 				return m, tea.ExecProcess(c, func(err error) tea.Msg {
@@ -329,16 +244,88 @@ func (m psModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// Handle refreshMsg (from ExecProcess returns for ssh/code)
-	if _, ok := msg.(refreshMsg); ok {
-		m.projects = loadProjects()
-		m.table = buildTable(m.projects, m.height-6)
-		return m, tea.ClearScreen
+	return m, nil
+}
+
+func leftPaneWidth(termWidth int) int {
+	w := termWidth / 2
+	if w > 60 {
+		w = 60
+	}
+	if w < 40 {
+		w = 40
+	}
+	return w
+}
+
+func (m psModel) renderTable(width, height int) string {
+	var b strings.Builder
+
+	// Header
+	header := fmt.Sprintf("  %-3s %-14s %-12s %s", "#", "Project", "Status", "Profiles")
+	b.WriteString(headerStyle.Render(header) + "\n")
+	b.WriteString(headerStyle.Render(strings.Repeat("─", width)) + "\n")
+
+	// Rows
+	for i, p := range m.projects {
+		num := fmt.Sprintf("%-3d", i+1)
+		name := truncate(p.config.Name, 14)
+		profiles := truncate(strings.Join(p.config.Profiles, " "), width-35)
+
+		var status string
+		if p.status == "running" {
+			status = greenDot + " " + greenText.Render("running")
+		} else {
+			status = dimDot + " " + dimText.Render("stopped")
+		}
+
+		// Pad name and profiles to fixed widths (using visible chars only)
+		line := fmt.Sprintf("  %s %-14s %s  %s", num, name, padRight(status, 12, 10), profiles)
+
+		if i == m.cursor {
+			// Render selected row — apply highlight to the plain text parts
+			plainLine := fmt.Sprintf("  %-3d %-14s %-12s %s", i+1, name, p.status, profiles)
+			line = selectedStyle.Render(padToWidth(plainLine, width))
+		}
+
+		b.WriteString(line + "\n")
 	}
 
-	var cmd tea.Cmd
-	m.table, cmd = m.table.Update(msg)
-	return m, cmd
+	// Fill remaining height
+	rendered := strings.Count(b.String(), "\n")
+	for rendered < height {
+		b.WriteString("\n")
+		rendered++
+	}
+
+	return b.String()
+}
+
+// padRight pads a string that contains ANSI codes.
+// visibleLen is the known visible character count of s.
+// targetVisible is the desired visible width.
+func padRight(s string, targetVisible, visibleLen int) string {
+	if visibleLen >= targetVisible {
+		return s
+	}
+	return s + strings.Repeat(" ", targetVisible-visibleLen)
+}
+
+func padToWidth(s string, width int) string {
+	if len(s) >= width {
+		return s[:width]
+	}
+	return s + strings.Repeat(" ", width-len(s))
+}
+
+func truncate(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	if maxLen <= 3 {
+		return s[:maxLen]
+	}
+	return s[:maxLen-1] + "…"
 }
 
 func (m psModel) View() string {
@@ -346,22 +333,25 @@ func (m psModel) View() string {
 		return ""
 	}
 
-	paneHeight := m.height - 4
-	if paneHeight < 5 {
-		paneHeight = 5
+	paneH := m.height - 4
+	if paneH < 5 {
+		paneH = 5
 	}
 
-	// Left pane: table
-	leftWidth := 62
-	left := m.tableStyle.
-		Width(leftWidth - 4).
-		Height(paneHeight - 2).
-		Render(m.table.View())
+	leftW := leftPaneWidth(m.width)
+	innerLeftW := leftW - 4 // border + padding
+
+	// Left pane: custom table
+	tableContent := m.renderTable(innerLeftW, paneH-2)
+	left := paneStyle.
+		Width(innerLeftW).
+		Height(paneH - 2).
+		Render(tableContent)
 
 	// Right pane: output
-	rightWidth := m.width - leftWidth - 1
-	if rightWidth < 20 {
-		rightWidth = 20
+	rightW := m.width - leftW - 5
+	if rightW < 10 {
+		rightW = 10
 	}
 
 	outputTitle := "Output"
@@ -372,20 +362,19 @@ func (m psModel) View() string {
 		}
 	}
 
-	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("42"))
-	outputHeader := titleStyle.Render(outputTitle)
-
+	m.output.Width = rightW
+	m.output.Height = paneH - 4
+	outputHeader := boldText.Copy().Foreground(lipgloss.Color("42")).Render(outputTitle)
 	rightContent := outputHeader + "\n" + m.output.View()
-	right := m.paneStyle.
-		Width(rightWidth - 4).
-		Height(paneHeight - 2).
+
+	right := paneStyle.
+		Width(rightW).
+		Height(paneH - 2).
 		Render(rightContent)
 
-	// Join horizontally
 	layout := lipgloss.JoinHorizontal(lipgloss.Top, left, " ", right)
 
-	help := lipgloss.NewStyle().Faint(true)
-	helpText := help.Render("↑/↓ navigate • u start • d stop • s ssh • c claude • D destroy • q quit")
+	helpText := helpStyle.Render("↑/↓ navigate • u start • d stop • s ssh • c claude • D destroy • q quit")
 
 	return layout + "\n" + helpText
 }
