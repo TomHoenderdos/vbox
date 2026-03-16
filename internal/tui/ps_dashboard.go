@@ -348,8 +348,9 @@ func (m psModel) renderTable(width, height int) string {
 				statusStr = selDim.Render("○ stopped")
 			}
 			prefix := selStyle.Render(fmt.Sprintf("  %s %-14s ", num, name))
+			statusPad := selStyle.Render(strings.Repeat(" ", 2)) // pad after status
 			suffix := selStyle.Render(padToWidth(fmt.Sprintf("  %s", profiles), w-32))
-			line := prefix + padRight(statusStr, 12, 10) + suffix
+			line := prefix + statusStr + statusPad + suffix
 			b.WriteString(line + "\n")
 		} else {
 			// Normal row
