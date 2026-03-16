@@ -357,8 +357,8 @@ func (m psModel) renderTable(width, height int) string {
 			profiles = ""
 		}
 
-		dots := dimText.Render(fmt.Sprintf("  %-9s", dotFrames[m.dotTick%3]))
-		selDots := selDim.Render(fmt.Sprintf("  %-9s", dotFrames[m.dotTick%3]))
+		dots := dimText.Render(fmt.Sprintf(" %-8s", dotFrames[m.dotTick%3]))
+		selDots := selDim.Render(fmt.Sprintf(" %-8s", dotFrames[m.dotTick%3]))
 
 		if i == m.cursor {
 			var statusStr string
@@ -367,7 +367,6 @@ func (m psModel) renderTable(width, height int) string {
 				statusStr = selGreen.Render("● running")
 			} else if p.status == "..." {
 				statusStr = selDots
-				visLen = 11
 			} else {
 				statusStr = selDim.Render("○ stopped")
 			}
@@ -383,7 +382,6 @@ func (m psModel) renderTable(width, height int) string {
 				statusStr = greenDot.Render("●") + " " + greenText.Render("running")
 			} else if p.status == "..." {
 				statusStr = dots
-				visLen = 11
 			} else {
 				statusStr = dimDot.Render("○") + " " + dimText.Render("stopped")
 			}
