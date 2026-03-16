@@ -1,15 +1,25 @@
 # vbox
 
-Vagrant-based isolated dev environments with [Claude Code](https://claude.com/claude-code) pre-installed.
+Isolated dev environments with [Claude Code](https://claude.ai/claude-code) built in.
 
-Like [ClaudeBox](https://github.com/RchGrav/claudebox), but with real VM isolation instead of Docker containers — no shared kernel, no Docker socket access, no dangerous capabilities.
+Spin up a full VM, pick your stack, and start coding with Claude — credentials, plugins, and settings sync automatically from your host.
+
+Like [ClaudeBox](https://github.com/RchGrav/claudebox), but with real VM isolation instead of Docker containers.
 
 ## Install
 
 ```bash
-git clone git@github.com:TomHoenderdos/vbox.git
-cd vbox
-./install.sh
+# macOS Apple Silicon
+curl -L https://github.com/TomHoenderdos/vbox/releases/latest/download/vbox-darwin-arm64 -o vbox
+chmod +x vbox && mv vbox ~/.local/bin/
+
+# macOS Intel
+curl -L https://github.com/TomHoenderdos/vbox/releases/latest/download/vbox-darwin-amd64 -o vbox
+chmod +x vbox && mv vbox ~/.local/bin/
+
+# Linux ARM64
+curl -L https://github.com/TomHoenderdos/vbox/releases/latest/download/vbox-linux-arm64 -o vbox
+chmod +x vbox && sudo mv vbox /usr/local/bin/
 ```
 
 Requires [Vagrant](https://www.vagrantup.com/) and a VM provider ([Parallels](https://www.parallels.com/), VirtualBox, etc).
@@ -17,42 +27,47 @@ Requires [Vagrant](https://www.vagrantup.com/) and a VM provider ([Parallels](ht
 ## Quick start
 
 ```bash
-# Interactive wizard
+# Interactive wizard — walks you through profiles, ports, resources
 vbox init
 
 # Or one-liner
 vbox init MyApp --profile elixir,postgres
 
-# Start and connect
+# Start the VM and open Claude Code
 vbox up
-vbox ssh
+vbox code
 ```
+
+`vbox code` handles everything — syncs credentials from macOS Keychain, configures the VM, and drops you into Claude Code.
 
 ## Commands
 
 | Command | Description |
 |---|---|
-| `vbox init [name]` | Init vbox in new or current dir |
+| `vbox init [name]` | Create a new project (interactive wizard or flags) |
 | `vbox up` | Start the VM |
 | `vbox down` | Stop the VM |
 | `vbox down -v` | Stop and destroy the VM |
-| `vbox ssh` | SSH into the VM |
+| `vbox code` | Launch Claude Code in the VM |
+| `vbox ssh` | Shell into the VM |
 | `vbox exec <cmd>` | Run a command in the VM |
-| `vbox ps` | Show all vbox projects and status |
+| `vbox ps` | Interactive dashboard — manage all VMs |
 | `vbox logs [-f]` | Show VM system logs |
-| `vbox sync` | Rsync files to VM |
+| `vbox sync push` | Sync files host -> VM (with confirmation) |
+| `vbox sync pull` | Sync files VM -> host (with confirmation) |
+| `vbox usb list` | List available USB devices |
+| `vbox usb attach <dev>` | Attach USB device to VM |
 | `vbox profile list` | List available profiles |
 | `vbox profile add <name>` | Add a profile to current project |
 | `vbox regen` | Regenerate Vagrantfile from config |
 
-## Init options
+## Dashboard
 
-```
---profile elixir,postgres    Comma-separated profiles (default: elixir)
---memory 2048                VM memory in MB (default: 2048)
---cpus 2                     VM CPU count (default: 2)
---no-sync                    Disable auto file sync on vbox up
-```
+`vbox ps` opens an interactive TUI dashboard:
+
+- Arrow keys to navigate
+- `u` start, `d` stop, `s` ssh, `c` claude code, `D` destroy
+- Live status updates after each action
 
 ## Profiles
 
@@ -66,10 +81,10 @@ vbox ssh
 | `java` | Java via asdf | :8080 |
 | `ruby` | Ruby via asdf | :3000 |
 | `php` | PHP + Composer | :8000 |
-| `dart` | Dart + Flutter web/server (no device/emulator) | :8080 |
+| `dart` | Dart + Flutter web/server | :8080 |
 | `c` | GCC, Clang, GDB, Valgrind, CMake | - |
-| `esp` | ESP-IDF for ESP32/S2/S3/C3/C6 | :3333 |
-| `embedded` | ARM toolchain, OpenOCD, PlatformIO | - |
+| `esp` | ESP-IDF for ESP32 (USB passthrough) | :3333 |
+| `embedded` | ARM toolchain, OpenOCD, PlatformIO (USB passthrough) | - |
 | `postgres` | PostgreSQL server | :15432 |
 | `mysql` | MySQL server | :3306 |
 | `redis` | Redis server | :6379 |
@@ -78,23 +93,32 @@ vbox ssh
 | `security` | nmap, tcpdump, Wireshark, John, Hydra | - |
 | `web` | Nginx, Apache utils, HTTPie | :8080, :8443 |
 
-Language versions are automatically read from your `.tool-versions` file (asdf).
+Language versions are read from `.tool-versions` (asdf). Profiles are composable — use as many as you need.
+
+## Init options
+
+```
+--profile elixir,postgres    Comma-separated profiles (default: elixir)
+--memory 2048                VM memory in MB (default: 2048)
+--cpus 2                     VM CPU count (default: 2)
+--no-sync                    Disable auto sync on vbox up
+```
 
 ## How it works
 
-- `vbox init` generates a `Vagrantfile` and `.vbox.conf` from your chosen profiles
-- Each profile defines its own provisioning script and port forwards
-- `~/.claude` is synced to the VM so Claude Code works out of the box
-- `vbox up` starts the VM and runs `rsync-auto` in the background for live file sync
-- All commands work from any subdirectory of your project
+1. `vbox init` generates a `Vagrantfile` and `.vbox.conf` from your chosen profiles
+2. Each profile is a self-contained bash script defining ports and provisioning
+3. `vbox up` starts the VM, does an initial file sync, and starts background VM -> host sync
+4. `vbox code` syncs Claude credentials from macOS Keychain, patches VM settings, and launches Claude Code — all in one SSH session
+5. Files you create in the VM automatically sync back to the host
 
 ## Adding custom profiles
 
-Create a file in `~/.vbox/profiles/myprofile.sh`:
+Create `~/.vbox/profiles/myprofile.sh`:
 
 ```bash
 #!/usr/bin/env bash
-# My custom profile: does something cool.
+# My custom profile: one-line description shown in profile list.
 
 profile_ports() {
   echo "9000:9000:MyService"
@@ -107,16 +131,18 @@ PROVISION
 }
 ```
 
-Then use it: `vbox init MyApp --profile myprofile`
+Then: `vbox init MyApp --profile myprofile`
 
-## Security (vs ClaudeBox)
+See [docs/CREATING_PROFILES.md](docs/CREATING_PROFILES.md) for the full guide.
+
+## Security
 
 | | vbox | ClaudeBox |
 |---|---|---|
 | Isolation | Full VM (separate kernel) | Docker container (shared kernel) |
-| Host filesystem | Rsync only (no live mount) | Direct volume mounts |
+| Host filesystem | Rsync only (explicit push/pull) | Direct volume mounts |
 | SSH keys | Not mounted | Mounted into container |
-| Network capabilities | Standard NAT | NET_ADMIN + NET_RAW |
+| Network | Standard NAT | NET_ADMIN + NET_RAW |
 | Docker socket | Not exposed | Exposed to container |
 | Root on host | Not required | Required (Docker group) |
 
