@@ -1,0 +1,245 @@
+# vbox Go rewrite plan
+
+Rewrite the bash `vbox` CLI tool in Go using cobra + bubbletea.
+
+## Architecture
+
+- **cobra** for CLI command routing
+- **bubbletea** for interactive TUI (init wizard + ps dashboard)
+- **Profiles stay as .sh files** — Go shells out to bash to call `profile_ports`, `profile_usb`, `profile_provision`
+- **Config stays as key=value** (.vbox.conf) — bash-sourceable format
+- **Single binary** — replaces the bash script, drop-in compatible
+
+## Dependencies
+
+```
+github.com/spf13/cobra
+github.com/charmbracelet/bubbletea
+github.com/charmbracelet/bubbles  (textinput, table)
+github.com/charmbracelet/lipgloss
+```
+
+## Project structure
+
+```
+vbox/
+  main.go                          # Entry point, calls cmd.Execute()
+  go.mod
+  go.sum
+
+  cmd/
+    root.go                        # cobra root command, SilenceUsage/Errors
+    init.go                        # init command: flags or bubbletea wizard
+    up.go                          # start VM, start rsync-auto
+    down.go                        # stop VM (-v to destroy)
+    ssh.go                         # shell into VM (syscall.Exec)
+    code.go                        # launch Claude Code in VM (syscall.Exec)
+    exec_cmd.go                    # run command in VM (exec_cmd to avoid keyword)
+    ps.go                          # interactive dashboard or plain table
+    logs.go                        # journalctl in VM (-f for follow)
+    sync.go                        # one-shot rsync
+    usb.go                         # usb list/attach/detach (Parallels)
+    profile.go                     # profile list/add subcommands
+    regen.go                       # regenerate Vagrantfile
+
+  internal/
+    config/
+      config.go                    # Config struct, Load, Write, FindProjectRoot
+    profile/
+      profile.go                   # Shell out to profile .sh files
+    vagrant/
+      vagrant.go                   # Run/RunSilent/Status/VMID wrappers
+      vagrantfile.go               # Vagrantfile generation (text/template)
+      rsync.go                     # rsync-auto start/stop with process group mgmt
+    tui/
+      init_wizard.go               # bubbletea multi-step init wizard
+      ps_dashboard.go              # bubbletea interactive VM dashboard
+
+  profiles/                        # existing .sh profile scripts (unchanged)
+```
+
+## Package details
+
+### internal/config/config.go
+
+```go
+type Port struct {
+    Guest int
+    Host  int
+    Label string
+}
+
+type Config struct {
+    Name     string
+    Profiles []string
+    Ports    []Port
+    Memory   int
+    CPUs     int
+    AutoSync bool
+}
+```
+
+Functions:
+- `FindProjectRoot() (string, error)` — walk up from cwd looking for `.vbox.conf`
+- `Load(dir string) (*Config, error)` — parse key=value file (VBOX_NAME, VBOX_PROFILES space-separated, VBOX_PORTS pipe-separated "guest:host:label", VBOX_MEMORY, VBOX_CPUS, VBOX_AUTO_SYNC)
+- `FindAndLoad() (string, *Config, error)` — combines both
+- `(c *Config) Write(dir string) error` — write .vbox.conf in bash-sourceable format
+- `(c *Config) PortsString() string` — serialize ports to "4000:4000:Phoenix|5432:15432:PostgreSQL"
+- `ParsePorts(s string) []Port` — parse pipe-separated port string
+- `HomeDir() string`, `ProjectsDir() string` — helper paths
+
+### internal/profile/profile.go
+
+```go
+type Info struct {
+    Name        string
+    Description string
+    Ports       []config.Port
+    NeedsUSB    bool
+}
+```
+
+Functions:
+- `Dir() string` — returns ~/.vbox/profiles
+- `List() ([]Info, error)` — glob *.sh, skip base.sh, read line 2 for description
+- `GetPorts(name string) ([]config.Port, error)` — `bash -c "source <file> && profile_ports"`, parse "guest:host:label" lines
+- `GetUSB(name string) (bool, error)` — `bash -c "source <file> && profile_usb"`, check for "true"
+- `GetProvision(name string, projectDir string) (string, error)` — `bash -c "PROJECT_DIR=<dir> source <file> && profile_provision"`
+- `CollectPorts(profiles []string) ([]config.Port, error)` — dedup by guest port
+- `Exists(name string) bool`
+
+All profile interaction shells out to bash. Profiles are never parsed by Go.
+
+### internal/vagrant/vagrant.go
+
+- `Run(dir string, args ...string) error` — run vagrant, inherit stdio
+- `RunSilent(dir string, args ...string) (string, error)` — capture output
+- `Status(dir string) (string, error)` — parse --machine-readable for state
+- `VMID(dir string) (string, error)` — extract Parallels VM ID
+
+### internal/vagrant/vagrantfile.go
+
+Uses `text/template` to generate the Vagrantfile. Template data struct:
+
+```go
+type vagrantfileData struct {
+    Memory    int
+    CPUs      int
+    NeedsUSB  bool
+    Ports     []config.Port
+    Provision string
+}
+```
+
+`GenerateVagrantfile(dir string, cfg *config.Config) error`:
+1. Collect provision from each profile (base + cfg.Profiles) via profile.GetProvision
+2. Check USB needs via profile.GetUSB
+3. Execute template, write Vagrantfile
+
+Vagrantfile template (Ruby):
+```ruby
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+# Generated by vbox — do not edit manually
+
+Vagrant.configure("2") do |config|
+  config.vm.box = "luminositylabsllc/bento-ubuntu-24.04-arm64"
+
+  config.vm.provider "parallels" do |prl|
+    prl.memory = {{.Memory}}
+    prl.cpus = {{.CPUs}}
+    {{- if .NeedsUSB}}
+    prl.customize "post-import", ["set", :id, "--device-add", "usb"]
+    {{- end}}
+  end
+  {{range .Ports}}
+  config.vm.network "forwarded_port", guest: {{.Guest}}, host: {{.Host}}, auto_correct: true  # {{.Label}}
+  {{- end}}
+
+  config.vm.synced_folder ".", "/vagrant", type: "rsync",
+    rsync__exclude: [".git/", ".vagrant/", "_build/", "deps/", "node_modules/"]
+
+  config.vm.synced_folder "#{Dir.home}/.claude", "/home/vagrant/.claude", type: "rsync"
+  config.vm.provision "file", source: "#{Dir.home}/.claude.json", destination: "/home/vagrant/.claude.json"
+
+  if Dir.exist?(File.join(Dir.home, ".config", "gh"))
+    config.vm.synced_folder "#{Dir.home}/.config/gh", "/home/vagrant/.config/gh", type: "rsync"
+  end
+
+  config.vm.provision "shell", inline: <<-SHELL
+{{.Provision}}
+    echo "vbox provisioning complete!"
+  SHELL
+end
+```
+
+### internal/vagrant/rsync.go
+
+- `StartRsyncAuto(dir string) error` — kill existing, start in new process group (SysProcAttr.Setpgid=true), write PID to .vagrant/rsync-auto.pid
+- `StopRsyncAuto(dir string) error` — read PID file, kill process group with syscall.Kill(-pgid, SIGTERM), pgrep fallback
+
+### internal/tui/init_wizard.go
+
+bubbletea multi-step wizard. Steps:
+
+1. **Project name** — textinput, default basename(cwd)
+2. **Profile selection** — numbered list, type comma-separated numbers or names
+3. **Port configuration** — per-port textinput for host port, showing label and guest port
+4. **Resources** — memory (2048) and cpus (2) textinputs
+5. **Auto sync** — y/n (default y)
+6. **Summary** — bordered box with all choices, y/n confirm
+
+Returns `*config.Config` or error if aborted.
+
+Use lipgloss for:
+- Bold step titles
+- Bordered summary box
+- Dim helper text
+
+### internal/tui/ps_dashboard.go
+
+bubbletea interactive dashboard using bubbles/table.
+
+Columns: #, Project, Status, Profiles, Ports
+
+Status display: `● running` (green) / `○ stopped` (dim)
+
+Keybindings (shown at bottom):
+- ↑/↓ or j/k — navigate
+- u — start VM (vagrant up)
+- d — stop VM (vagrant halt)
+- s — SSH into VM
+- c — Claude Code in VM
+- D — destroy VM (with confirm)
+- q/Esc — quit
+
+Actions use tea.ExecProcess to run vagrant commands (suspends TUI, runs in foreground, resumes). After up/down/destroy, refresh status.
+
+## Command behavior
+
+| Command | Implementation |
+|---------|---------------|
+| `init [name]` | If no flags + tty: bubbletea wizard. Else: build config from flags. Write .vbox.conf, generate Vagrantfile, git init if needed |
+| `up` | Load config, regen Vagrantfile if missing, `vagrant up`, start rsync-auto |
+| `down` | Stop rsync-auto, `vagrant halt`. With -v: confirm + `vagrant destroy -f` |
+| `ssh` | `syscall.Exec` into `vagrant ssh` (replaces process) |
+| `code` | `syscall.Exec` into `vagrant ssh -c "cd /vagrant && claude --dangerously-skip-permissions"` |
+| `exec <cmd>` | `vagrant ssh -c "<cmd>"` |
+| `ps` | If tty: bubbletea dashboard. Else: plain table |
+| `logs [-f]` | `vagrant ssh -c "sudo journalctl ..."`. Follow mode uses syscall.Exec |
+| `sync` | `vagrant rsync` |
+| `usb` | Subcommands: list/attach/detach via prlsrvctl/prlctl |
+| `profile list` | Show all profiles with descriptions and ports |
+| `profile add` | Add profile, prompt for ports, update config, regen |
+| `regen` | Load config, regenerate Vagrantfile |
+
+## Build
+
+```bash
+go build -o vbox .
+cp vbox ~/.local/bin/vbox
+```
+
+## Migration
+
+Drop-in replacement. Reads same .vbox.conf format, calls same profile .sh files. No migration needed.
