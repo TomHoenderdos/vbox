@@ -14,11 +14,17 @@ func init() {
       su - vagrant -c 'git clone https://github.com/asdf-vm/asdf.git ~/.asdf --branch v0.14.0'
     fi
 
-    # Install Claude Code (native)
-    su - vagrant -c 'curl -sL https://claude.ai/install.sh -o /tmp/claude-install.sh && bash /tmp/claude-install.sh && rm /tmp/claude-install.sh'
-
-    # Remove npm-installed claude if present (conflicts with native)
+    # Remove npm-installed claude if present (conflicts with native, blocks auto-update)
     npm uninstall -g @anthropic-ai/claude-code 2>/dev/null || true
+
+    # Install Claude Code (native) — must run as vagrant user for correct ownership
+    su - vagrant -c '
+      mkdir -p ~/.local/bin
+      curl -fsSL https://claude.ai/install.sh | bash
+    '
+
+    # Ensure ~/.local is fully owned by vagrant (native install needs write access for auto-updates)
+    chown -R vagrant:vagrant /home/vagrant/.local
 
     # Install GitHub CLI
     curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
@@ -33,6 +39,7 @@ func init() {
     BASHRC="/home/vagrant/.bashrc"
     grep -qF '.asdf/asdf.sh' "$BASHRC" || su - vagrant -c 'echo ". $HOME/.asdf/asdf.sh" >> ~/.bashrc'
     grep -qF '.asdf/completions' "$BASHRC" || su - vagrant -c 'echo ". $HOME/.asdf/completions/asdf.bash" >> ~/.bashrc'
+    grep -qF '.local/bin' "$BASHRC" || echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$BASHRC"
     grep -qF 'cd /vagrant' "$BASHRC" || echo 'cd /vagrant' >> "$BASHRC"
     grep -qF 'alias claude=' "$BASHRC" || echo 'alias claude="claude --dangerously-skip-permissions"' >> "$BASHRC"
 

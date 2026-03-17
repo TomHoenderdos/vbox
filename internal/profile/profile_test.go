@@ -1,18 +1,11 @@
 package profile
 
 import (
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 )
 
 func TestList(t *testing.T) {
-	dir := Dir()
-	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		t.Skip("profiles directory not installed at", dir)
-	}
-
 	infos, err := List()
 	if err != nil {
 		t.Fatalf("List() error: %v", err)
@@ -41,11 +34,6 @@ func TestList(t *testing.T) {
 }
 
 func TestListDescriptions(t *testing.T) {
-	dir := Dir()
-	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		t.Skip("profiles directory not installed at", dir)
-	}
-
 	infos, err := List()
 	if err != nil {
 		t.Fatalf("List() error: %v", err)
@@ -59,10 +47,6 @@ func TestListDescriptions(t *testing.T) {
 }
 
 func TestGetPorts(t *testing.T) {
-	if _, err := os.Stat(filepath.Join(Dir(), "go.sh")); os.IsNotExist(err) {
-		t.Skip("go.sh profile not installed")
-	}
-
 	ports, err := GetPorts("go")
 	if err != nil {
 		t.Fatalf("GetPorts(go) error: %v", err)
@@ -78,10 +62,6 @@ func TestGetPorts(t *testing.T) {
 }
 
 func TestGetPortsNoOutput(t *testing.T) {
-	if _, err := os.Stat(filepath.Join(Dir(), "rust.sh")); os.IsNotExist(err) {
-		t.Skip("rust.sh profile not installed")
-	}
-
 	ports, err := GetPorts("rust")
 	if err != nil {
 		t.Fatalf("GetPorts(rust) error: %v", err)
@@ -93,10 +73,6 @@ func TestGetPortsNoOutput(t *testing.T) {
 }
 
 func TestGetUSB(t *testing.T) {
-	if _, err := os.Stat(filepath.Join(Dir(), "go.sh")); os.IsNotExist(err) {
-		t.Skip("go.sh profile not installed")
-	}
-
 	usb, err := GetUSB("go")
 	if err != nil {
 		t.Fatalf("GetUSB(go) error: %v", err)
@@ -107,10 +83,6 @@ func TestGetUSB(t *testing.T) {
 }
 
 func TestGetUSBEmbedded(t *testing.T) {
-	if _, err := os.Stat(filepath.Join(Dir(), "embedded.sh")); os.IsNotExist(err) {
-		t.Skip("embedded.sh profile not installed")
-	}
-
 	usb, err := GetUSB("embedded")
 	if err != nil {
 		t.Fatalf("GetUSB(embedded) error: %v", err)
@@ -121,10 +93,6 @@ func TestGetUSBEmbedded(t *testing.T) {
 }
 
 func TestGetProvision(t *testing.T) {
-	if _, err := os.Stat(filepath.Join(Dir(), "base.sh")); os.IsNotExist(err) {
-		t.Skip("base.sh profile not installed")
-	}
-
 	prov, err := GetProvision("base", "/tmp/testproject")
 	if err != nil {
 		t.Fatalf("GetProvision(base) error: %v", err)
@@ -134,16 +102,12 @@ func TestGetProvision(t *testing.T) {
 		t.Error("GetProvision(base) returned empty provision")
 	}
 
-	if !strings.Contains(prov, "npm") {
-		t.Error("base provision should reference npm")
+	if !strings.Contains(prov, "claude") {
+		t.Error("base provision should reference claude")
 	}
 }
 
 func TestCollectPorts(t *testing.T) {
-	if _, err := os.Stat(filepath.Join(Dir(), "go.sh")); os.IsNotExist(err) {
-		t.Skip("profiles not installed")
-	}
-
 	ports, err := CollectPorts([]string{"go", "node"})
 	if err != nil {
 		t.Fatalf("CollectPorts() error: %v", err)
@@ -159,10 +123,6 @@ func TestCollectPorts(t *testing.T) {
 }
 
 func TestExists(t *testing.T) {
-	if _, err := os.Stat(Dir()); os.IsNotExist(err) {
-		t.Skip("profiles directory not installed")
-	}
-
 	if !Exists("base") {
 		t.Error("Exists(base) should be true")
 	}
