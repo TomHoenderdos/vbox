@@ -14,7 +14,7 @@ cat <<'PROVISION'
     fi
 
     # Install Claude Code (native)
-    su - vagrant -c 'curl -fsSL https://claude.ai/install.sh | sh'
+    su - vagrant -c 'curl -fsSL https://claude.ai/install.sh | bash'
 
     # Remove npm-installed claude if present (conflicts with native)
     npm uninstall -g @anthropic-ai/claude-code 2>/dev/null || true
