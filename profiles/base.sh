@@ -13,15 +13,20 @@ cat <<'PROVISION'
       su - vagrant -c 'git clone https://github.com/asdf-vm/asdf.git ~/.asdf --branch v0.14.0'
     fi
 
-    # Install Claude Code
-    apt-get install -y nodejs npm
+    # Install Claude Code (native)
     su - vagrant -c 'curl -fsSL https://claude.ai/install.sh | sh'
+
+    # Remove npm-installed claude if present (conflicts with native)
+    npm uninstall -g @anthropic-ai/claude-code 2>/dev/null || true
 
     # Install GitHub CLI
     curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list
     apt-get update
     apt-get install -y gh
+
+    # Trust GitHub SSH host key
+    su - vagrant -c 'mkdir -p ~/.ssh && ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null'
 
     # Configure bashrc (idempotent)
     BASHRC="/home/vagrant/.bashrc"
