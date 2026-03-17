@@ -46,6 +46,15 @@ func runSyncPush() error {
 		return err
 	}
 
+	fmt.Println("WARNING: This will overwrite VM files with host contents.")
+	fmt.Print("Continue? [y/N] ")
+	reader := bufio.NewReader(os.Stdin)
+	input, _ := reader.ReadString('\n')
+	if strings.TrimSpace(strings.ToLower(input)) != "y" {
+		fmt.Println("==> Cancelled")
+		return nil
+	}
+
 	fmt.Println("==> Pushing files from host to VM...")
 	if err := vagrant.Run(root, "rsync"); err != nil {
 		return err
