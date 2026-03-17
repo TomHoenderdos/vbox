@@ -1,12 +1,15 @@
-#!/usr/bin/env bash
-# Dart profile: installs Dart SDK and Flutter for web/server development (no device/emulator support).
+package profile
 
-profile_ports() {
-  echo "8080:8080:Flutter web"
-}
+import "github.com/TomHoenderdos/vbox/internal/config"
 
-profile_provision() {
-cat <<'PROVISION'
+func init() {
+	register(&Profile{
+		Name:        "dart",
+		Description: "Dart profile: installs Dart SDK and Flutter for web/server development.",
+		Ports:       []config.Port{{Guest: 8080, Host: 8080, Label: "Flutter web"}},
+		Excludes:    []string{".dart_tool/", "build/"},
+		Provision: func(projectDir string) string {
+			return `
     # Dart/Flutter dependencies
     apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libstdc++-12-dev
 
@@ -17,5 +20,7 @@ cat <<'PROVISION'
     fi
     grep -qF '.flutter/bin' /home/vagrant/.bashrc || \
       su - vagrant -c 'echo "export PATH=\$HOME/.flutter/bin:\$HOME/.flutter/bin/cache/dart-sdk/bin:\$PATH" >> ~/.bashrc'
-PROVISION
+`
+		},
+	})
 }

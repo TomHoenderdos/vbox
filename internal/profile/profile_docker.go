@@ -1,10 +1,11 @@
-#!/usr/bin/env bash
-# Docker profile: installs Docker Engine inside the VM.
+package profile
 
-profile_ports() { :; }
-
-profile_provision() {
-cat <<'PROVISION'
+func init() {
+	register(&Profile{
+		Name:        "docker",
+		Description: "Docker profile: installs Docker Engine inside the VM.",
+		Provision: func(projectDir string) string {
+			return `
     # Install Docker via official repo
     install -m 0755 -d /etc/apt/keyrings
     curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
@@ -15,5 +16,7 @@ cat <<'PROVISION'
 
     # Allow vagrant user to use Docker without sudo
     usermod -aG docker vagrant
-PROVISION
+`
+		},
+	})
 }

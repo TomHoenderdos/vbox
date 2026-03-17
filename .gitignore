@@ -1,3 +1,4 @@
 .vagrant/
 .vbox.conf
 .DS_Store
+/vbox

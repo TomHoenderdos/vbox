@@ -1,12 +1,12 @@
-#!/usr/bin/env bash
-# Embedded profile: ARM toolchain, serial debuggers, PlatformIO, with USB flashing.
+package profile
 
-profile_ports() { :; }
-
-profile_usb() { echo "true"; }
-
-profile_provision() {
-cat <<'PROVISION'
+func init() {
+	register(&Profile{
+		Name:        "embedded",
+		Description: "Embedded profile: ARM toolchain, serial debuggers, PlatformIO, with USB flashing.",
+		NeedsUSB:    true,
+		Provision: func(projectDir string) string {
+			return `
     apt-get install -y gcc-arm-none-eabi gdb-multiarch openocd picocom minicom screen libusb-1.0-0
 
     # udev rules for common debug probes (ST-Link, J-Link, CMSIS-DAP)
@@ -25,5 +25,7 @@ UDEV
 
     # Install PlatformIO
     su - vagrant -c 'pip3 install platformio'
-PROVISION
+`
+		},
+	})
 }

@@ -16,6 +16,7 @@ type vagrantfileData struct {
 	CPUs      int
 	NeedsUSB  bool
 	Ports     []config.Port
+	Excludes  string
 	Provision string
 }
 
@@ -38,7 +39,7 @@ Vagrant.configure("2") do |config|
 {{- end}}
 
   config.vm.synced_folder ".", "/vagrant", type: "rsync",
-    rsync__exclude: [".git/", ".vagrant/", "_build/", "deps/", "node_modules/"]
+    rsync__exclude: [".vagrant/"{{.Excludes}}]
 
   # Sync Claude Code config and credentials from host
   config.vm.synced_folder "#{Dir.home}/.claude", "/home/vagrant/.claude", type: "rsync"
@@ -73,6 +74,13 @@ func GenerateVagrantfile(dir string, cfg *config.Config) error {
 		provisions = append(provisions, prov)
 	}
 
+	// Collect rsync excludes from profiles
+	excludes := profile.CollectExcludes(profiles)
+	var excludeStr string
+	for _, e := range excludes {
+		excludeStr += fmt.Sprintf(", %q", e)
+	}
+
 	// Check USB needs
 	needsUSB := false
 	for _, name := range cfg.Profiles {
@@ -88,6 +96,7 @@ func GenerateVagrantfile(dir string, cfg *config.Config) error {
 		CPUs:      cfg.CPUs,
 		NeedsUSB:  needsUSB,
 		Ports:     cfg.Ports,
+		Excludes:  excludeStr,
 		Provision: strings.Join(provisions, "\n"),
 	}
 

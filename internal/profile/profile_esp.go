@@ -1,14 +1,15 @@
-#!/usr/bin/env bash
-# ESP-IDF profile: Espressif IoT Development Framework for ESP32/S2/S3/C3/C6 with USB flashing.
+package profile
 
-profile_ports() {
-  echo "3333:3333:ESP OpenOCD"
-}
+import "github.com/TomHoenderdos/vbox/internal/config"
 
-profile_usb() { echo "true"; }
-
-profile_provision() {
-cat <<'PROVISION'
+func init() {
+	register(&Profile{
+		Name:        "esp",
+		Description: "ESP-IDF profile: Espressif IoT Development Framework for ESP32 with USB flashing.",
+		Ports:       []config.Port{{Guest: 3333, Host: 3333, Label: "ESP OpenOCD"}},
+		NeedsUSB:    true,
+		Provision: func(projectDir string) string {
+			return `
     # ESP-IDF prerequisites
     apt-get install -y git wget flex bison gperf python3 python3-pip python3-venv \
       cmake ninja-build ccache libffi-dev libssl-dev dfu-util libusb-1.0-0 \
@@ -33,5 +34,7 @@ UDEV
     fi
     grep -qF 'get_idf' /home/vagrant/.bashrc || \
       su - vagrant -c 'echo "alias get_idf=\"source ~/esp/esp-idf/export.sh\"" >> ~/.bashrc'
-PROVISION
+`
+		},
+	})
 }

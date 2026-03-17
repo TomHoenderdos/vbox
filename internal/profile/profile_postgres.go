@@ -1,12 +1,14 @@
-#!/usr/bin/env bash
-# PostgreSQL profile: installs and configures PostgreSQL for development.
+package profile
 
-profile_ports() {
-  echo "5432:15432:PostgreSQL"
-}
+import "github.com/TomHoenderdos/vbox/internal/config"
 
-profile_provision() {
-cat <<'PROVISION'
+func init() {
+	register(&Profile{
+		Name:        "postgres",
+		Description: "PostgreSQL profile: installs and configures PostgreSQL for development.",
+		Ports:       []config.Port{{Guest: 5432, Host: 15432, Label: "PostgreSQL"}},
+		Provision: func(projectDir string) string {
+			return `
     apt-get install -y postgresql postgresql-contrib
     systemctl enable postgresql
     systemctl start postgresql
@@ -21,5 +23,7 @@ cat <<'PROVISION'
     echo "listen_addresses = '*'" >> "$PG_CONF"
     echo "host all all 0.0.0.0/0 md5" >> "$PG_HBA"
     systemctl restart postgresql
-PROVISION
+`
+		},
+	})
 }

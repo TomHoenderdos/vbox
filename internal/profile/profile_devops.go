@@ -1,10 +1,12 @@
-#!/usr/bin/env bash
-# DevOps profile: Kubernetes, Terraform, Ansible, AWS CLI.
+package profile
 
-profile_ports() { :; }
-
-profile_provision() {
-cat <<'PROVISION'
+func init() {
+	register(&Profile{
+		Name:        "devops",
+		Description: "DevOps profile: Kubernetes, Terraform, Ansible, AWS CLI.",
+		Excludes:    []string{".terraform/"},
+		Provision: func(projectDir string) string {
+			return `
     # kubectl
     curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.31/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
     echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.31/deb/ /" > /etc/apt/sources.list.d/kubernetes.list
@@ -20,5 +22,7 @@ cat <<'PROVISION'
     curl -fsSL https://releases.hashicorp.com/terraform/1.9.8/terraform_1.9.8_linux_arm64.zip -o /tmp/terraform.zip
     unzip -q /tmp/terraform.zip -d /usr/local/bin
     rm /tmp/terraform.zip
-PROVISION
+`
+		},
+	})
 }

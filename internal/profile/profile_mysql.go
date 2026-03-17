@@ -1,12 +1,14 @@
-#!/usr/bin/env bash
-# MySQL profile: installs MySQL server for development.
+package profile
 
-profile_ports() {
-  echo "3306:3306:MySQL"
-}
+import "github.com/TomHoenderdos/vbox/internal/config"
 
-profile_provision() {
-cat <<'PROVISION'
+func init() {
+	register(&Profile{
+		Name:        "mysql",
+		Description: "MySQL profile: installs MySQL server for development.",
+		Ports:       []config.Port{{Guest: 3306, Host: 3306, Label: "MySQL"}},
+		Provision: func(projectDir string) string {
+			return `
     apt-get install -y mysql-server
 
     systemctl enable mysql
@@ -21,5 +23,7 @@ cat <<'PROVISION'
     # Allow connections from host
     sed -i 's/^bind-address.*/bind-address = 0.0.0.0/' /etc/mysql/mysql.conf.d/mysqld.cnf
     systemctl restart mysql
-PROVISION
+`
+		},
+	})
 }

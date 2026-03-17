@@ -6,7 +6,7 @@ Rewrite the bash `vbox` CLI tool in Go using cobra + bubbletea.
 
 - **cobra** for CLI command routing
 - **bubbletea** for interactive TUI (init wizard + ps dashboard)
-- **Profiles stay as .sh files** — Go shells out to bash to call `profile_ports`, `profile_usb`, `profile_provision`
+- **Profiles are declarative Go structs** — registered in `internal/profile/profile_*.go`, no bash scripts
 - **Config stays as key=value** (.vbox.conf) — bash-sourceable format
 - **Single binary** — replaces the bash script, drop-in compatible
 
@@ -46,7 +46,8 @@ vbox/
     config/
       config.go                    # Config struct, Load, Write, FindProjectRoot
     profile/
-      profile.go                   # Shell out to profile .sh files
+      profile.go                   # Profile type, registry, helpers
+      profile_*.go                 # One file per profile (self-registering via init())
     vagrant/
       vagrant.go                   # Run/RunSilent/Status/VMID wrappers
       vagrantfile.go               # Vagrantfile generation (text/template)
@@ -55,7 +56,7 @@ vbox/
       init_wizard.go               # bubbletea multi-step init wizard
       ps_dashboard.go              # bubbletea interactive VM dashboard
 
-  profiles/                        # existing .sh profile scripts (unchanged)
+  profiles/                        # (removed — profiles are now Go structs)
 ```
 
 ## Package details
@@ -88,27 +89,31 @@ Functions:
 - `ParsePorts(s string) []Port` — parse pipe-separated port string
 - `HomeDir() string`, `ProjectsDir() string` — helper paths
 
-### internal/profile/profile.go
+### internal/profile/profile.go + profile_*.go
 
 ```go
-type Info struct {
+type Profile struct {
     Name        string
     Description string
     Ports       []config.Port
+    Excludes    []string
     NeedsUSB    bool
+    Provision   func(projectDir string) string
 }
 ```
 
-Functions:
-- `Dir() string` — returns ~/.vbox/profiles
-- `List() ([]Info, error)` — glob *.sh, skip base.sh, read line 2 for description
-- `GetPorts(name string) ([]config.Port, error)` — `bash -c "source <file> && profile_ports"`, parse "guest:host:label" lines
-- `GetUSB(name string) (bool, error)` — `bash -c "source <file> && profile_usb"`, check for "true"
-- `GetProvision(name string, projectDir string) (string, error)` — `bash -c "PROJECT_DIR=<dir> source <file> && profile_provision"`
-- `CollectPorts(profiles []string) ([]config.Port, error)` — dedup by guest port
-- `Exists(name string) bool`
+Profiles are declarative Go structs registered via `register()` in individual `profile_*.go` files.
+Version detection (`.tool-versions`) is handled in Go via `readToolVersion()`.
 
-All profile interaction shells out to bash. Profiles are never parsed by Go.
+Functions:
+- `Get(name string) *Profile`
+- `Exists(name string) bool`
+- `List() ([]Info, error)` — all profiles except base
+- `GetPorts(name string) ([]config.Port, error)`
+- `GetUSB(name string) (bool, error)`
+- `GetProvision(name string, projectDir string) (string, error)`
+- `CollectPorts(profiles []string) ([]config.Port, error)` — dedup by guest port
+- `CollectExcludes(profiles []string) []string` — dedup rsync excludes
 
 ### internal/vagrant/vagrant.go
 
@@ -242,4 +247,4 @@ cp vbox ~/.local/bin/vbox
 
 ## Migration
 
-Drop-in replacement. Reads same .vbox.conf format, calls same profile .sh files. No migration needed.
+Drop-in replacement. Reads same .vbox.conf format. Profiles are now built into the binary (no external .sh files needed).

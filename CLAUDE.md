@@ -17,7 +17,7 @@ go vet ./...                 # lint
 
 ## Key conventions
 
-- Profiles are bash scripts in ~/.vbox/profiles/*.sh — Go shells out, never parses them
+- Profiles are declarative Go structs in internal/profile/profile_*.go — no bash, Nix-inspired
 - Config is key=value in .vbox.conf — must stay bash-sourceable
 - Use syscall.Exec (not os/exec) for ssh/code/logs -f so terminal works cleanly
 - Use SysProcAttr.Setpgid for rsync-auto process group management
@@ -29,7 +29,7 @@ go vet ./...                 # lint
 Read PLAN.md and implement all Go source files. Build order:
 
 1. `internal/config/config.go` — types and config I/O
-2. `internal/profile/profile.go` — shell out to profile scripts
+2. `internal/profile/profile.go` + `profile_*.go` — declarative profile registry
 3. `internal/vagrant/vagrant.go` — vagrant command wrappers
 4. `internal/vagrant/vagrantfile.go` — Vagrantfile generation
 5. `internal/vagrant/rsync.go` — rsync-auto management
@@ -42,4 +42,4 @@ Read PLAN.md and implement all Go source files. Build order:
 
 After each package, run `go build ./...` to verify compilation.
 
-The existing bash `vbox` script is in the repo root for reference. The profiles/ directory contains all .sh profile scripts.
+The existing bash `vbox` script is in the repo root for reference.
