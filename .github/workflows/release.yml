@@ -61,3 +61,83 @@ jobs:
         with:
           files: vbox-*
           generate_release_notes: true
+
+  update-homebrew:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: TomHoenderdos/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+      - name: Update formula
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          VER="${VERSION#v}"
+
+          # Download all binaries and compute SHA256
+          for target in darwin-arm64 darwin-amd64 linux-arm64 linux-amd64; do
+            curl -sL "https://github.com/TomHoenderdos/vbox/releases/download/${VERSION}/vbox-${target}" -o "vbox-${target}"
+          done
+
+          SHA_DARWIN_ARM64=$(sha256sum vbox-darwin-arm64 | cut -d' ' -f1)
+          SHA_DARWIN_AMD64=$(sha256sum vbox-darwin-amd64 | cut -d' ' -f1)
+          SHA_LINUX_ARM64=$(sha256sum vbox-linux-arm64 | cut -d' ' -f1)
+          SHA_LINUX_AMD64=$(sha256sum vbox-linux-amd64 | cut -d' ' -f1)
+
+          cat > Formula/vbox.rb << FORMULA
+          class Vbox < Formula
+            desc "Isolated dev environments with Claude Code built in"
+            homepage "https://github.com/TomHoenderdos/vbox"
+            version "${VER}"
+            license "MIT"
+
+            on_macos do
+              on_arm do
+                url "https://github.com/TomHoenderdos/vbox/releases/download/v#{version}/vbox-darwin-arm64"
+                sha256 "${SHA_DARWIN_ARM64}"
+              end
+
+              on_intel do
+                url "https://github.com/TomHoenderdos/vbox/releases/download/v#{version}/vbox-darwin-amd64"
+                sha256 "${SHA_DARWIN_AMD64}"
+              end
+            end
+
+            on_linux do
+              on_arm do
+                url "https://github.com/TomHoenderdos/vbox/releases/download/v#{version}/vbox-linux-arm64"
+                sha256 "${SHA_LINUX_ARM64}"
+              end
+
+              on_intel do
+                url "https://github.com/TomHoenderdos/vbox/releases/download/v#{version}/vbox-linux-amd64"
+                sha256 "${SHA_LINUX_AMD64}"
+              end
+            end
+
+            depends_on "vagrant"
+
+            def install
+              binary = Dir["vbox-*"].first
+              bin.install binary => "vbox"
+            end
+
+            test do
+              assert_match "vbox", shell_output("#{bin}/vbox --help")
+            end
+          end
+          FORMULA
+
+          # Remove leading whitespace from heredoc
+          sed -i 's/^          //' Formula/vbox.rb
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/vbox.rb
+          git commit -m "Update vbox to ${{ github.ref_name }}"
+          git push
