@@ -16,11 +16,10 @@ var syncCmd = &cobra.Command{
 	Short: "Sync files between host and VM (push/pull)",
 	Long: `Sync files between host and VM.
 
-  vbox sync        Push files from host to VM (default)
   vbox sync push   Push files from host to VM
-  vbox sync pull   Pull files from VM to host (overwrites local files!)`,
+  vbox sync pull   Pull files from VM to host`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runSyncPush()
+		return cmd.Help()
 	},
 }
 
