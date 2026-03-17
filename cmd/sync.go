@@ -33,7 +33,7 @@ var syncPushCmd = &cobra.Command{
 
 var syncPullCmd = &cobra.Command{
 	Use:   "pull",
-	Short: "Pull files from VM to host (overwrites local files!)",
+	Short: "Pull files from VM to host",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runSyncPull()
 	},
