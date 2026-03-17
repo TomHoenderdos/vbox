@@ -13,7 +13,7 @@ import (
 
 var syncCmd = &cobra.Command{
 	Use:   "sync",
-	Short: "Sync files between host and VM",
+	Short: "Sync files between host and VM (push/pull)",
 	Long: `Sync files between host and VM.
 
   vbox sync        Push files from host to VM (default)
