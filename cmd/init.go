@@ -19,7 +19,6 @@ var (
 	initProfiles string
 	initMemory   int
 	initCPUs     int
-	initNoSync   bool
 )
 
 var initCmd = &cobra.Command{
@@ -30,7 +29,7 @@ var initCmd = &cobra.Command{
 		cwd, _ := os.Getwd()
 
 		flagsSet := cmd.Flags().Changed("profile") || cmd.Flags().Changed("memory") ||
-			cmd.Flags().Changed("cpus") || cmd.Flags().Changed("no-sync") || len(args) > 0
+			cmd.Flags().Changed("cpus") || len(args) > 0
 		interactive := !flagsSet && term.IsTerminal(int(os.Stdin.Fd()))
 
 		var cfg *config.Config
@@ -63,7 +62,6 @@ var initCmd = &cobra.Command{
 				Ports:    ports,
 				Memory:   initMemory,
 				CPUs:     initCPUs,
-				AutoSync: !initNoSync,
 			}
 		}
 
@@ -73,7 +71,12 @@ var initCmd = &cobra.Command{
 		}
 
 		if _, err := os.Stat(filepath.Join(projectDir, config.ConfFile)); err == nil {
-			return fmt.Errorf("already a vbox project")
+			fmt.Print("Already a vbox project. Overwrite config? [y/N] ")
+			var answer string
+			fmt.Scanln(&answer)
+			if answer != "y" && answer != "Y" {
+				return fmt.Errorf("aborted")
+			}
 		}
 
 		os.MkdirAll(projectDir, 0755)
@@ -138,6 +141,5 @@ func init() {
 	initCmd.Flags().StringVar(&initProfiles, "profile", "", "Comma-separated profiles (default: elixir)")
 	initCmd.Flags().IntVar(&initMemory, "memory", 2048, "VM memory in MB")
 	initCmd.Flags().IntVar(&initCPUs, "cpus", 2, "VM CPU count")
-	initCmd.Flags().BoolVar(&initNoSync, "no-sync", false, "Disable auto file sync")
 	rootCmd.AddCommand(initCmd)
 }

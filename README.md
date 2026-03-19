@@ -34,7 +34,7 @@ chmod +x vbox && sudo mv vbox /usr/local/bin/
 Invoke-WebRequest -Uri "https://github.com/TomHoenderdos/vbox/releases/latest/download/vbox-windows-amd64.exe" -OutFile "$env:LOCALAPPDATA\vbox.exe"
 ```
 
-Requires [Vagrant](https://www.vagrantup.com/) and a VM provider ([Parallels](https://www.parallels.com/), VirtualBox, etc).
+Requires [Vagrant](https://www.vagrantup.com/) and [Parallels Desktop](https://www.parallels.com/) (with the [vagrant-parallels](https://github.com/Parallels/vagrant-parallels) plugin).
 
 ## Quick start
 
@@ -113,16 +113,15 @@ Language versions are read from `.tool-versions` (asdf). Profiles are composable
 --profile elixir,postgres    Comma-separated profiles (default: elixir)
 --memory 2048                VM memory in MB (default: 2048)
 --cpus 2                     VM CPU count (default: 2)
---no-sync                    Disable auto sync on vbox up
 ```
 
 ## How it works
 
 1. `vbox init` generates a `Vagrantfile` and `.vbox.conf` from your chosen profiles
 2. Each profile is a self-contained bash script defining ports and provisioning
-3. `vbox up` starts the VM, does an initial file sync, and starts background VM -> host sync
+3. `vbox up` starts the VM with bidirectional file sync via Parallels shared folders — changes on either side appear instantly
 4. `vbox code` syncs Claude credentials from macOS Keychain, patches VM settings, and launches Claude Code — all in one SSH session
-5. Files you create in the VM automatically sync back to the host
+5. Git works natively on both sides — branch switches, commits, and pushes from the VM all just work (SSH agent forwarding is enabled)
 
 ## Adding custom profiles
 
@@ -152,8 +151,8 @@ See [docs/CREATING_PROFILES.md](docs/CREATING_PROFILES.md) for the full guide.
 | | vbox | ClaudeBox |
 |---|---|---|
 | Isolation | Full VM (separate kernel) | Docker container (shared kernel) |
-| Host filesystem | Rsync only (explicit push/pull) | Direct volume mounts |
-| SSH keys | Not mounted | Mounted into container |
+| Host filesystem | Parallels shared folder (project dir only) | Direct volume mounts |
+| SSH keys | Forwarded via SSH agent (never copied) | Mounted into container |
 | Network | Standard NAT | NET_ADMIN + NET_RAW |
 | Docker socket | Not exposed | Exposed to container |
 | Root on host | Not required | Required (Docker group) |

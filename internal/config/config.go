@@ -22,7 +22,6 @@ type Config struct {
 	Ports    []Port
 	Memory   int
 	CPUs     int
-	AutoSync bool
 }
 
 // HomeDir returns ~/.vbox
@@ -63,9 +62,8 @@ func Load(dir string) (*Config, error) {
 	}
 
 	cfg := &Config{
-		Memory:   2048,
-		CPUs:     2,
-		AutoSync: true,
+		Memory: 2048,
+		CPUs:   2,
 	}
 
 	for _, line := range strings.Split(string(data), "\n") {
@@ -98,7 +96,7 @@ func Load(dir string) (*Config, error) {
 				cfg.CPUs = v
 			}
 		case "VBOX_AUTO_SYNC":
-			cfg.AutoSync = value == "true"
+			// ignored — sync is always on via Parallels shared folders
 		}
 	}
 
@@ -126,8 +124,7 @@ VBOX_PROFILES="%s"
 VBOX_PORTS="%s"
 VBOX_MEMORY=%d
 VBOX_CPUS=%d
-VBOX_AUTO_SYNC=%t
-`, c.Name, strings.Join(c.Profiles, " "), c.PortsString(), c.Memory, c.CPUs, c.AutoSync)
+`, c.Name, strings.Join(c.Profiles, " "), c.PortsString(), c.Memory, c.CPUs)
 
 	return os.WriteFile(filepath.Join(dir, ConfFile), []byte(content), 0644)
 }

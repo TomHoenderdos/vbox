@@ -43,7 +43,7 @@ func TestVagrantfileTemplateBasic(t *testing.T) {
 		`apt-get update`,
 		`echo "vbox provisioning complete!"`,
 		`luminositylabsllc/bento-ubuntu-24.04-arm64`,
-		`rsync__exclude`,
+		`config.ssh.forward_agent = true`,
 	}
 	for _, c := range checks {
 		if !strings.Contains(out, c) {

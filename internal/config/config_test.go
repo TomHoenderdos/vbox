@@ -106,9 +106,8 @@ func TestLoadAndWrite(t *testing.T) {
 			{Guest: 4000, Host: 4000, Label: "Phoenix"},
 			{Guest: 5432, Host: 15432, Label: "PostgreSQL"},
 		},
-		Memory:   4096,
-		CPUs:     4,
-		AutoSync: true,
+		Memory: 4096,
+		CPUs:   4,
 	}
 
 	if err := original.Write(dir); err != nil {
@@ -139,9 +138,6 @@ func TestLoadAndWrite(t *testing.T) {
 	if loaded.CPUs != original.CPUs {
 		t.Errorf("CPUs = %d, want %d", loaded.CPUs, original.CPUs)
 	}
-	if loaded.AutoSync != original.AutoSync {
-		t.Errorf("AutoSync = %v, want %v", loaded.AutoSync, original.AutoSync)
-	}
 }
 
 func TestLoadDefaults(t *testing.T) {
@@ -160,25 +156,6 @@ VBOX_PROFILES="go"
 	}
 	if cfg.CPUs != 2 {
 		t.Errorf("default CPUs = %d, want 2", cfg.CPUs)
-	}
-	if !cfg.AutoSync {
-		t.Error("default AutoSync should be true")
-	}
-}
-
-func TestLoadAutoSyncFalse(t *testing.T) {
-	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, ConfFile), []byte(`VBOX_NAME="test"
-VBOX_AUTO_SYNC=false
-`), 0644)
-
-	cfg, err := Load(dir)
-	if err != nil {
-		t.Fatalf("Load() error: %v", err)
-	}
-
-	if cfg.AutoSync {
-		t.Error("AutoSync should be false")
 	}
 }
 
@@ -213,9 +190,8 @@ func TestWriteBashSourceable(t *testing.T) {
 		Name:     "myapp",
 		Profiles: []string{"go", "postgres"},
 		Ports:    []Port{{Guest: 8080, Host: 8080, Label: "Go HTTP"}},
-		Memory:   2048,
-		CPUs:     2,
-		AutoSync: true,
+		Memory: 2048,
+		CPUs:   2,
 	}
 
 	if err := cfg.Write(dir); err != nil {
@@ -231,7 +207,6 @@ func TestWriteBashSourceable(t *testing.T) {
 		`VBOX_PORTS="8080:8080:Go HTTP"`,
 		`VBOX_MEMORY=2048`,
 		`VBOX_CPUS=2`,
-		`VBOX_AUTO_SYNC=true`,
 	} {
 		if !strings.Contains(content, expected) {
 			t.Errorf("config missing %q in:\n%s", expected, content)

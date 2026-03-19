@@ -16,7 +16,6 @@ type vagrantfileData struct {
 	CPUs      int
 	NeedsUSB  bool
 	Ports     []config.Port
-	Excludes  string
 	Provision string
 }
 
@@ -26,6 +25,9 @@ const vagrantfileTmpl = `# -*- mode: ruby -*-
 
 Vagrant.configure("2") do |config|
   config.vm.box = "luminositylabsllc/bento-ubuntu-24.04-arm64"
+
+  # Enable SSH agent forwarding so git push works from the VM
+  config.ssh.forward_agent = true
 
   config.vm.provider "parallels" do |prl|
     prl.memory = {{.Memory}}
@@ -38,8 +40,8 @@ Vagrant.configure("2") do |config|
   config.vm.network "forwarded_port", guest: {{.Guest}}, host: {{.Host}}, auto_correct: true  # {{.Label}}
 {{- end}}
 
-  config.vm.synced_folder ".", "/vagrant", type: "rsync",
-    rsync__exclude: [".vagrant/"{{.Excludes}}]
+  # Bidirectional shared folder via Parallels (real-time sync both ways)
+  config.vm.synced_folder ".", "/vagrant"
 
   # Sync Claude Code config and credentials from host
   config.vm.synced_folder "#{Dir.home}/.claude", "/home/vagrant/.claude", type: "rsync"
@@ -74,13 +76,6 @@ func GenerateVagrantfile(dir string, cfg *config.Config) error {
 		provisions = append(provisions, prov)
 	}
 
-	// Collect rsync excludes from profiles
-	excludes := profile.CollectExcludes(profiles)
-	var excludeStr string
-	for _, e := range excludes {
-		excludeStr += fmt.Sprintf(", %q", e)
-	}
-
 	// Check USB needs
 	needsUSB := false
 	for _, name := range cfg.Profiles {
@@ -96,7 +91,6 @@ func GenerateVagrantfile(dir string, cfg *config.Config) error {
 		CPUs:      cfg.CPUs,
 		NeedsUSB:  needsUSB,
 		Ports:     cfg.Ports,
-		Excludes:  excludeStr,
 		Provision: strings.Join(provisions, "\n"),
 	}
 

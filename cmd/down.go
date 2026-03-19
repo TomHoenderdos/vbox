@@ -24,8 +24,6 @@ var downCmd = &cobra.Command{
 			return err
 		}
 
-		vagrant.StopRsyncAuto(root)
-
 		if downDestroy {
 			fmt.Printf("This will destroy the VM and all data for '%s'. Are you sure? [y/N] ", cfg.Name)
 			reader := bufio.NewReader(os.Stdin)

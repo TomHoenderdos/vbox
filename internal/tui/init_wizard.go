@@ -21,7 +21,6 @@ const (
 	stepPorts
 	stepMemory
 	stepCPUs
-	stepAutoSync
 	stepSummary
 )
 
@@ -51,7 +50,7 @@ func newInitModel(cwd string) initModel {
 		step:       stepName,
 		input:      ti,
 		cwd:        cwd,
-		config:     &config.Config{Memory: 2048, CPUs: 2, AutoSync: true},
+		config:     &config.Config{Memory: 2048, CPUs: 2},
 		profiles:   profiles,
 		titleStyle: lipgloss.NewStyle().Bold(true),
 		dimStyle:   lipgloss.NewStyle().Faint(true),
@@ -173,14 +172,6 @@ func (m initModel) advance() (tea.Model, tea.Cmd) {
 			}
 		}
 		m.config.CPUs = cpus
-		m.step = stepAutoSync
-		m.input.SetValue("")
-		m.input.Placeholder = "Y"
-
-	case stepAutoSync:
-		if strings.ToLower(val) == "n" {
-			m.config.AutoSync = false
-		}
 		m.step = stepSummary
 		m.input.SetValue("")
 		m.input.Placeholder = "Y"
@@ -233,11 +224,6 @@ func (m initModel) View() string {
 		b.WriteString(m.input.View() + "\n")
 		b.WriteString(m.dimStyle.Render("(default: 2)"))
 
-	case stepAutoSync:
-		b.WriteString(m.titleStyle.Render("Auto file sync?") + "\n")
-		b.WriteString(m.input.View() + "\n")
-		b.WriteString(m.dimStyle.Render("(Y/n)"))
-
 	case stepSummary:
 		var summary strings.Builder
 		summary.WriteString(fmt.Sprintf("  Project:    %s\n", m.config.Name))
@@ -245,8 +231,7 @@ func (m initModel) View() string {
 		for _, p := range m.config.Ports {
 			summary.WriteString(fmt.Sprintf("  %-12s :%-5d -> :%-5d\n", p.Label, p.Guest, p.Host))
 		}
-		summary.WriteString(fmt.Sprintf("  Memory:     %dMB / %d CPUs\n", m.config.Memory, m.config.CPUs))
-		summary.WriteString(fmt.Sprintf("  Auto sync:  %t", m.config.AutoSync))
+		summary.WriteString(fmt.Sprintf("  Memory:     %dMB / %d CPUs", m.config.Memory, m.config.CPUs))
 
 		b.WriteString(m.titleStyle.Render("Summary") + "\n")
 		b.WriteString(m.boxStyle.Render(summary.String()) + "\n\n")

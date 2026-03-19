@@ -32,12 +32,6 @@ var upCmd = &cobra.Command{
 		// Sync Claude Code credentials from macOS Keychain to VM
 		syncClaudeCredentials(root)
 
-		if cfg.AutoSync {
-			if err := vagrant.StartRsyncAuto(root); err != nil {
-				fmt.Fprintf(os.Stderr, "Warning: could not start rsync-auto: %v\n", err)
-			}
-		}
-
 		return nil
 	},
 }

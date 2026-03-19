@@ -9,6 +9,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var codeResume bool
+
 var codeCmd = &cobra.Command{
 	Use:   "code",
 	Short: "Launch Claude Code in the VM",
@@ -52,6 +54,9 @@ if os.path.exists(cj):
         d2['installMethod'] = 'native'
         with open(cj, 'w') as f: json.dump(d2, f, indent=2)
 " && cd /vagrant && claude --dangerously-skip-permissions`
+		if codeResume {
+			script += " --resume"
+		}
 
 		fmt.Println("==> Claude Code credentials synced to VM")
 		return vagrant.ExecReplace(root, "ssh", "-c", script)
@@ -59,5 +64,6 @@ if os.path.exists(cj):
 }
 
 func init() {
+	codeCmd.Flags().BoolVarP(&codeResume, "resume", "r", false, "Resume the most recent conversation")
 	rootCmd.AddCommand(codeCmd)
 }
