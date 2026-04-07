@@ -32,8 +32,8 @@ UDEV
       su - vagrant -c 'mkdir -p ~/esp && cd ~/esp && git clone --recursive https://github.com/espressif/esp-idf.git -b v5.4 --depth 1'
       su - vagrant -c 'cd ~/esp/esp-idf && ./install.sh all'
     fi
-    grep -qF 'get_idf' /home/vagrant/.bashrc || \
-      su - vagrant -c 'echo "alias get_idf=\"source ~/esp/esp-idf/export.sh\"" >> ~/.bashrc'
+    grep -qF 'esp-idf/export.sh' /home/vagrant/.bashrc || \
+      su - vagrant -c 'echo "source ~/esp/esp-idf/export.sh" >> ~/.bashrc'
 `
 		},
 	})
