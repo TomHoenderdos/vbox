@@ -138,7 +138,7 @@ func TestVagrantfileTemplateNoPorts(t *testing.T) {
 	}
 }
 
-func TestVagrantfileTemplateClaudeConfig(t *testing.T) {
+func TestVagrantfileTemplateToolConfig(t *testing.T) {
 	data := vagrantfileData{
 		Memory: 2048,
 		CPUs:   2,
@@ -152,6 +152,7 @@ func TestVagrantfileTemplateClaudeConfig(t *testing.T) {
 	checks := []string{
 		`.claude"`,
 		`.claude.json`,
+		`.codex`,
 		`.config/gh`,
 	}
 	for _, c := range checks {

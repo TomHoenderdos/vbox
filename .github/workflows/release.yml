@@ -89,7 +89,7 @@ jobs:
 
           cat > Formula/vbox.rb << FORMULA
           class Vbox < Formula
-            desc "Isolated dev environments with Claude Code built in"
+            desc "Isolated dev environments with Claude Code and Codex CLI built in"
             homepage "https://github.com/TomHoenderdos/vbox"
             version "${VER}"
             license "MIT"

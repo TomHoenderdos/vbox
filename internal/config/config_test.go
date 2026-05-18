@@ -190,8 +190,8 @@ func TestWriteBashSourceable(t *testing.T) {
 		Name:     "myapp",
 		Profiles: []string{"go", "postgres"},
 		Ports:    []Port{{Guest: 8080, Host: 8080, Label: "Go HTTP"}},
-		Memory: 2048,
-		CPUs:   2,
+		Memory:   2048,
+		CPUs:     2,
 	}
 
 	if err := cfg.Write(dir); err != nil {
@@ -229,7 +229,9 @@ func TestFindProjectRoot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FindProjectRoot() error: %v", err)
 	}
-	if found != root {
+	foundReal, _ := filepath.EvalSymlinks(found)
+	rootReal, _ := filepath.EvalSymlinks(root)
+	if foundReal != rootReal {
 		t.Errorf("FindProjectRoot() = %q, want %q", found, root)
 	}
 }

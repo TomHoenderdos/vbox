@@ -310,6 +310,15 @@ func (m psModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				})
 			}
 
+		case "x":
+			if p := m.selectedProject(); p != nil {
+				c := exec.Command("vagrant", "ssh", "-c", "cd /vagrant && codex")
+				c.Dir = p.dir
+				return m, tea.ExecProcess(c, func(err error) tea.Msg {
+					return refreshMsg{}
+				})
+			}
+
 		case "D":
 			if p := m.selectedProject(); p != nil && !m.running {
 				m.running = true
@@ -479,7 +488,7 @@ func (m psModel) View() string {
 
 	layout := lipgloss.JoinHorizontal(lipgloss.Top, left, " ", right)
 
-	helpText := helpStyle.Render("↑/↓ navigate • u start • d stop • s ssh • c claude • D destroy • q quit")
+	helpText := helpStyle.Render("↑/↓ navigate • u start • d stop • s ssh • c claude • x codex • D destroy • q quit")
 
 	return layout + "\n" + helpText
 }

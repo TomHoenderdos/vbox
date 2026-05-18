@@ -20,6 +20,8 @@ func init() {
     su - vagrant -c 'source ~/.asdf/asdf.sh && asdf global java %s'
     grep -qF 'set-java-home' /home/vagrant/.bashrc || \
       su - vagrant -c 'echo ". ~/.asdf/plugins/java/set-java-home.bash" >> ~/.bashrc'
+    grep -qF 'set-java-home' /home/vagrant/.profile || \
+      su - vagrant -c 'echo ". ~/.asdf/plugins/java/set-java-home.bash" >> ~/.profile'
 `, javaVersion, javaVersion)
 		},
 	})

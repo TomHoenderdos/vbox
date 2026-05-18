@@ -9,8 +9,8 @@ import (
 
 var rootCmd = &cobra.Command{
 	Use:   "vbox",
-	Short: "Vagrant-based isolated dev environments with Claude Code",
-	Long:  "vbox - Create and manage Vagrant VMs pre-configured with Claude Code.",
+	Short: "Vagrant-based isolated dev environments with Claude Code and Codex CLI",
+	Long:  "vbox - Create and manage Vagrant VMs pre-configured with Claude Code and Codex CLI.",
 }
 
 func Execute() {

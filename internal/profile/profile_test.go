@@ -105,6 +105,10 @@ func TestGetProvision(t *testing.T) {
 	if !strings.Contains(prov, "claude") {
 		t.Error("base provision should reference claude")
 	}
+
+	if !strings.Contains(prov, "@openai/codex") {
+		t.Error("base provision should install Codex CLI")
+	}
 }
 
 func TestCollectPorts(t *testing.T) {

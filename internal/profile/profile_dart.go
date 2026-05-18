@@ -20,6 +20,8 @@ func init() {
     fi
     grep -qF '.flutter/bin' /home/vagrant/.bashrc || \
       su - vagrant -c 'echo "export PATH=\$HOME/.flutter/bin:\$HOME/.flutter/bin/cache/dart-sdk/bin:\$PATH" >> ~/.bashrc'
+    grep -qF '.flutter/bin' /home/vagrant/.profile || \
+      su - vagrant -c 'echo "export PATH=\$HOME/.flutter/bin:\$HOME/.flutter/bin/cache/dart-sdk/bin:\$PATH" >> ~/.profile'
 `
 		},
 	})

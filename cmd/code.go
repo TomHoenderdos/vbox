@@ -5,19 +5,37 @@ import (
 	"strings"
 
 	"github.com/TomHoenderdos/vbox/internal/config"
+	"github.com/TomHoenderdos/vbox/internal/docker"
 	"github.com/TomHoenderdos/vbox/internal/vagrant"
 	"github.com/spf13/cobra"
 )
 
 var codeResume bool
+var codeDocker bool
+var codeDockerImage string
 
 var codeCmd = &cobra.Command{
 	Use:   "code",
-	Short: "Launch Claude Code in the VM",
+	Short: "Launch Claude Code",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		root, _, err := config.FindAndLoad()
+		root, cfg, err := config.FindAndLoad()
 		if err != nil {
 			return err
+		}
+
+		if codeDocker {
+			claudeArgs := []string{"--dangerously-skip-permissions"}
+			if codeResume {
+				claudeArgs = append(claudeArgs, "--resume")
+			}
+			command := "npm install -g @anthropic-ai/claude-code --no-audit >/dev/null && claude " + shellQuoteArgs(claudeArgs)
+			fmt.Println("==> Launching Claude Code in Docker")
+			return docker.Run(docker.Options{
+				ProjectRoot: root,
+				Config:      cfg,
+				Image:       codeDockerImage,
+				Command:     command,
+			})
 		}
 
 		// Get credentials and config from host
@@ -65,5 +83,7 @@ if os.path.exists(cj):
 
 func init() {
 	codeCmd.Flags().BoolVarP(&codeResume, "resume", "r", false, "Resume the most recent conversation")
+	codeCmd.Flags().BoolVar(&codeDocker, "docker", false, "Launch in Docker instead of the VM")
+	codeCmd.Flags().StringVar(&codeDockerImage, "docker-image", docker.DefaultImage, "Docker image to use with --docker")
 	rootCmd.AddCommand(codeCmd)
 }

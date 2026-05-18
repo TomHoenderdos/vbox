@@ -12,6 +12,8 @@ func init() {
     fi
     grep -qF '.cargo/env' /home/vagrant/.bashrc || \
       su - vagrant -c 'echo "source $HOME/.cargo/env" >> ~/.bashrc'
+    grep -qF '.cargo/env' /home/vagrant/.profile || \
+      su - vagrant -c 'echo "source \$HOME/.cargo/env" >> ~/.profile'
 `
 		},
 	})

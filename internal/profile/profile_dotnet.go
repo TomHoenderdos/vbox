@@ -25,6 +25,12 @@ func init() {
       su - vagrant -c 'echo "export DOTNET_ROOT=\$(dirname \$(asdf which dotnet))" >> ~/.bashrc'
     grep -qF 'DOTNET_CLI_TELEMETRY_OPTOUT' /home/vagrant/.bashrc || \
       su - vagrant -c 'echo "export DOTNET_CLI_TELEMETRY_OPTOUT=1" >> ~/.bashrc'
+
+    # Also add to .profile for non-interactive shells (Claude Code)
+    grep -qF 'DOTNET_ROOT' /home/vagrant/.profile || \
+      su - vagrant -c 'echo "export DOTNET_ROOT=\$(dirname \$(asdf which dotnet))" >> ~/.profile'
+    grep -qF 'DOTNET_CLI_TELEMETRY_OPTOUT' /home/vagrant/.profile || \
+      su - vagrant -c 'echo "export DOTNET_CLI_TELEMETRY_OPTOUT=1" >> ~/.profile'
 `, dotnetVersion, dotnetVersion)
 		},
 	})

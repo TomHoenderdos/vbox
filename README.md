@@ -1,8 +1,8 @@
 # vbox
 
-Isolated dev environments with [Claude Code](https://claude.ai/claude-code) built in.
+Isolated dev environments with [Claude Code](https://claude.ai/claude-code) and [Codex CLI](https://github.com/openai/codex) built in.
 
-Spin up a full VM, pick your stack, and start coding with Claude — credentials, plugins, and settings sync automatically from your host.
+Spin up a full VM, pick your stack, and start coding with Claude or Codex — credentials, plugins, and settings sync automatically from your host.
 
 Like [ClaudeBox](https://github.com/RchGrav/claudebox), but with real VM isolation instead of Docker containers.
 
@@ -48,9 +48,20 @@ vbox init MyApp --profile elixir,postgres
 # Start the VM and open Claude Code
 vbox up
 vbox code
+
+# Or open Codex CLI
+vbox codex
+
+# Run either tool in Docker/OrbStack instead of a VM
+vbox code --docker
+vbox codex --docker
 ```
 
 `vbox code` handles everything — syncs credentials from macOS Keychain, configures the VM, and drops you into Claude Code.
+
+`vbox codex` launches Codex CLI in the VM. If `~/.codex` exists on your host, generated Vagrantfiles sync it into the VM.
+
+Add `--docker` to run the tool in a disposable Docker container instead. This works with OrbStack locally because it uses the standard Docker CLI. The container mounts the project at `/workspace`, mounts existing `~/.claude`, `~/.claude.json`, `~/.codex`, and GitHub CLI config when present, and forwards the ports configured for the project.
 
 ## Commands
 
@@ -61,6 +72,9 @@ vbox code
 | `vbox down` | Stop the VM |
 | `vbox down -v` | Stop and destroy the VM |
 | `vbox code` | Launch Claude Code in the VM |
+| `vbox code --docker` | Launch Claude Code in Docker |
+| `vbox codex [args...]` | Launch Codex CLI in the VM |
+| `vbox codex --docker [args...]` | Launch Codex CLI in Docker |
 | `vbox ssh` | Shell into the VM |
 | `vbox exec <cmd>` | Run a command in the VM |
 | `vbox ps` | Interactive dashboard — manage all VMs |
@@ -78,7 +92,7 @@ vbox code
 `vbox ps` opens an interactive TUI dashboard:
 
 - Arrow keys to navigate
-- `u` start, `d` stop, `s` ssh, `c` claude code, `D` destroy
+- `u` start, `d` stop, `s` ssh, `c` claude code, `x` codex, `D` destroy
 - Live status updates after each action
 
 ## Profiles
@@ -121,7 +135,9 @@ Language versions are read from `.tool-versions` (asdf). Profiles are composable
 2. Each profile is a self-contained bash script defining ports and provisioning
 3. `vbox up` starts the VM with bidirectional file sync via Parallels shared folders — changes on either side appear instantly
 4. `vbox code` syncs Claude credentials from macOS Keychain, patches VM settings, and launches Claude Code — all in one SSH session
-5. Git works natively on both sides — branch switches, commits, and pushes from the VM all just work (SSH agent forwarding is enabled)
+5. `vbox codex` launches Codex CLI from `/vagrant`; generated Vagrantfiles sync host `~/.codex` when present
+6. `--docker` runs Claude or Codex in a disposable `node:22-bookworm` container mounted at `/workspace`; override with `--docker-image`
+7. Git works natively on both sides — branch switches, commits, and pushes from the VM all just work (SSH agent forwarding is enabled)
 
 ## Adding custom profiles
 

@@ -47,6 +47,11 @@ Vagrant.configure("2") do |config|
   config.vm.synced_folder "#{Dir.home}/.claude", "/home/vagrant/.claude", type: "rsync"
   config.vm.provision "file", source: "#{Dir.home}/.claude.json", destination: "/home/vagrant/.claude.json"
 
+  # Sync Codex CLI config and credentials from host if they exist
+  if Dir.exist?(File.join(Dir.home, ".codex"))
+    config.vm.synced_folder "#{Dir.home}/.codex", "/home/vagrant/.codex", type: "rsync"
+  end
+
   # Sync tool credentials (GitHub CLI, etc.) if they exist
   if Dir.exist?(File.join(Dir.home, ".config", "gh"))
     config.vm.synced_folder "#{Dir.home}/.config/gh", "/home/vagrant/.config/gh", type: "rsync"
