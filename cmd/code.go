@@ -11,8 +11,8 @@ import (
 )
 
 var codeResume bool
-var codeDocker bool
-var codeDockerImage string
+var codeBackend string
+var codeImage string
 
 var codeCmd = &cobra.Command{
 	Use:   "code",
@@ -23,19 +23,28 @@ var codeCmd = &cobra.Command{
 			return err
 		}
 
-		if codeDocker {
+		backend, err := parseBackend(codeBackend)
+		if err != nil {
+			return err
+		}
+		if err := preflightBackend(backend); err != nil {
+			return err
+		}
+
+		if backend != BackendVM {
 			claudeArgs := []string{"--dangerously-skip-permissions"}
 			if codeResume {
 				claudeArgs = append(claudeArgs, "--resume")
 			}
 			command := dockerToolBootstrap("ripgrep git ca-certificates") +
 				" && npm install -g @anthropic-ai/claude-code --no-audit >/dev/null && claude " + shellQuoteArgs(claudeArgs)
-			fmt.Println("==> Launching Claude Code in Docker")
+			fmt.Printf("==> Launching Claude Code in %s\n", engineFor(backend))
 			return container.Run(container.Options{
 				ProjectRoot: root,
 				Config:      cfg,
-				Image:       codeDockerImage,
+				Image:       codeImage,
 				Command:     command,
+				Engine:      engineFor(backend),
 			})
 		}
 
@@ -84,7 +93,7 @@ if os.path.exists(cj):
 
 func init() {
 	codeCmd.Flags().BoolVarP(&codeResume, "resume", "r", false, "Resume the most recent conversation")
-	codeCmd.Flags().BoolVar(&codeDocker, "docker", false, "Launch in Docker instead of the VM")
-	codeCmd.Flags().StringVar(&codeDockerImage, "docker-image", container.DefaultImage, "Docker image to use with --docker")
+	codeCmd.Flags().StringVar(&codeBackend, "backend", "vm", "Runtime backend: vm, docker, or container")
+	codeCmd.Flags().StringVar(&codeImage, "image", container.DefaultImage, "Container image for docker/container backends")
 	rootCmd.AddCommand(codeCmd)
 }
