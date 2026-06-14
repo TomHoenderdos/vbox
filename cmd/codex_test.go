@@ -61,6 +61,20 @@ func TestCodexResumeArgs(t *testing.T) {
 	}
 }
 
+func TestParseCodexRuntimeArgsRejects(t *testing.T) {
+	cases := [][]string{
+		{"--docker"},
+		{"--docker-image", "custom:latest"},
+		{"--backend"},
+		{"--image"},
+	}
+	for _, in := range cases {
+		if _, _, _, _, err := parseCodexRuntimeArgs(in); err == nil {
+			t.Fatalf("parseCodexRuntimeArgs(%v) error = nil, want error", in)
+		}
+	}
+}
+
 func TestCodexHelpDoesNotRequireProject(t *testing.T) {
 	if err := codexCmd.RunE(codexCmd, []string{"--help"}); err != nil {
 		t.Fatalf("codex help returned error: %v", err)

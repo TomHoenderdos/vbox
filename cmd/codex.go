@@ -88,14 +88,20 @@ func parseCodexRuntimeArgs(args []string) ([]string, Backend, string, bool, erro
 
 	for i := 0; i < len(args); i++ {
 		switch {
+		case args[i] == "--docker" || args[i] == "--docker-image" || strings.HasPrefix(args[i], "--docker-image="):
+			return nil, BackendVM, "", false, fmt.Errorf("%s is no longer supported; use --backend docker", strings.SplitN(args[i], "=", 2)[0])
 		case args[i] == "--backend" && i+1 < len(args):
 			backendStr = args[i+1]
 			i++
+		case args[i] == "--backend":
+			return nil, BackendVM, "", false, fmt.Errorf("flag needs an argument: --backend")
 		case strings.HasPrefix(args[i], "--backend="):
 			backendStr = strings.TrimPrefix(args[i], "--backend=")
 		case args[i] == "--image" && i+1 < len(args):
 			image = args[i+1]
 			i++
+		case args[i] == "--image":
+			return nil, BackendVM, "", false, fmt.Errorf("flag needs an argument: --image")
 		case strings.HasPrefix(args[i], "--image="):
 			image = strings.TrimPrefix(args[i], "--image=")
 		case args[i] == "--resume" || args[i] == "-r":
