@@ -3,29 +3,39 @@ package cmd
 import "testing"
 
 func TestParseCodexRuntimeArgs(t *testing.T) {
-	originalDocker := codexDocker
-	originalImage := codexDockerImage
+	originalBackend := codexBackend
+	originalImage := codexImage
+	originalResume := codexResume
 	defer func() {
-		codexDocker = originalDocker
-		codexDockerImage = originalImage
+		codexBackend = originalBackend
+		codexImage = originalImage
+		codexResume = originalResume
 	}()
 
-	codexDocker = false
-	codexDockerImage = "node:22-bookworm"
+	codexBackend = "vm"
+	codexImage = "node:22-bookworm"
+	codexResume = false
 
-	args, dockerMode, image := parseCodexRuntimeArgs([]string{
-		"--docker",
-		"--docker-image",
+	args, backend, image, resume, err := parseCodexRuntimeArgs([]string{
+		"--backend",
+		"container",
+		"--image",
 		"custom:latest",
+		"--resume",
 		"--model",
 		"gpt-5.2",
 	})
-
-	if !dockerMode {
-		t.Fatal("dockerMode = false, want true")
+	if err != nil {
+		t.Fatalf("parseCodexRuntimeArgs error: %v", err)
+	}
+	if backend != BackendContainer {
+		t.Fatalf("backend = %v, want BackendContainer", backend)
 	}
 	if image != "custom:latest" {
 		t.Fatalf("image = %q, want custom:latest", image)
+	}
+	if !resume {
+		t.Fatal("resume = false, want true")
 	}
 	want := []string{"--model", "gpt-5.2"}
 	if len(args) != len(want) {
@@ -34,6 +44,19 @@ func TestParseCodexRuntimeArgs(t *testing.T) {
 	for i := range want {
 		if args[i] != want[i] {
 			t.Fatalf("args = %v, want %v", args, want)
+		}
+	}
+}
+
+func TestCodexResumeArgs(t *testing.T) {
+	got := codexResumeArgs([]string{"continue this"}, true)
+	want := []string{"resume", "--last", "continue this"}
+	if len(got) != len(want) {
+		t.Fatalf("codexResumeArgs() = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("codexResumeArgs() = %v, want %v", got, want)
 		}
 	}
 }

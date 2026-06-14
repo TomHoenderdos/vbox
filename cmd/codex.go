@@ -10,8 +10,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var codexDocker bool
-var codexDockerImage string
+var codexBackend string
+var codexImage string
 var codexResume bool
 
 var codexCmd = &cobra.Command{
@@ -28,18 +28,26 @@ var codexCmd = &cobra.Command{
 			return err
 		}
 
-		filteredArgs, dockerMode, dockerImage, resume := parseCodexRuntimeArgs(args)
+		filteredArgs, backend, image, resume, err := parseCodexRuntimeArgs(args)
+		if err != nil {
+			return err
+		}
+		if err := preflightBackend(backend); err != nil {
+			return err
+		}
 		filteredArgs = codexResumeArgs(filteredArgs, resume)
-		if dockerMode {
+
+		if backend != BackendVM {
 			codexArgs := append([]string{"--dangerously-bypass-approvals-and-sandbox"}, filteredArgs...)
 			command := dockerToolBootstrap("ripgrep git ca-certificates") +
 				" && npm install -g @openai/codex --no-audit >/dev/null && codex " + shellQuoteArgs(codexArgs)
-			fmt.Println("==> Launching Codex CLI in Docker")
+			fmt.Printf("==> Launching Codex CLI in %s\n", engineFor(backend))
 			return container.Run(container.Options{
 				ProjectRoot: root,
 				Config:      cfg,
-				Image:       dockerImage,
+				Image:       image,
 				Command:     command,
+				Engine:      engineFor(backend),
 			})
 		}
 
@@ -72,21 +80,24 @@ func codexResumeArgs(args []string, resume bool) []string {
 	return append([]string{"resume", "--last"}, args...)
 }
 
-func parseCodexRuntimeArgs(args []string) ([]string, bool, string, bool) {
-	dockerMode := codexDocker
-	dockerImage := codexDockerImage
+func parseCodexRuntimeArgs(args []string) ([]string, Backend, string, bool, error) {
+	backendStr := codexBackend
+	image := codexImage
 	resume := codexResume
 	filtered := make([]string, 0, len(args))
 
 	for i := 0; i < len(args); i++ {
 		switch {
-		case args[i] == "--docker":
-			dockerMode = true
-		case args[i] == "--docker-image" && i+1 < len(args):
-			dockerImage = args[i+1]
+		case args[i] == "--backend" && i+1 < len(args):
+			backendStr = args[i+1]
 			i++
-		case strings.HasPrefix(args[i], "--docker-image="):
-			dockerImage = strings.TrimPrefix(args[i], "--docker-image=")
+		case strings.HasPrefix(args[i], "--backend="):
+			backendStr = strings.TrimPrefix(args[i], "--backend=")
+		case args[i] == "--image" && i+1 < len(args):
+			image = args[i+1]
+			i++
+		case strings.HasPrefix(args[i], "--image="):
+			image = strings.TrimPrefix(args[i], "--image=")
 		case args[i] == "--resume" || args[i] == "-r":
 			resume = true
 		default:
@@ -94,12 +105,16 @@ func parseCodexRuntimeArgs(args []string) ([]string, bool, string, bool) {
 		}
 	}
 
-	return filtered, dockerMode, dockerImage, resume
+	backend, err := parseBackend(backendStr)
+	if err != nil {
+		return nil, BackendVM, "", false, err
+	}
+	return filtered, backend, image, resume, nil
 }
 
 func init() {
-	codexCmd.Flags().BoolVar(&codexDocker, "docker", false, "Launch in Docker instead of the VM")
-	codexCmd.Flags().StringVar(&codexDockerImage, "docker-image", container.DefaultImage, "Docker image to use with --docker")
+	codexCmd.Flags().StringVar(&codexBackend, "backend", "vm", "Runtime backend: vm, docker, or container")
+	codexCmd.Flags().StringVar(&codexImage, "image", container.DefaultImage, "Container image for docker/container backends")
 	codexCmd.Flags().BoolVarP(&codexResume, "resume", "r", false, "Resume the most recent conversation")
 	rootCmd.AddCommand(codexCmd)
 }
