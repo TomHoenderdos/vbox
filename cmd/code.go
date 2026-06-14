@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/TomHoenderdos/vbox/internal/config"
-	"github.com/TomHoenderdos/vbox/internal/docker"
+	"github.com/TomHoenderdos/vbox/internal/container"
 	"github.com/TomHoenderdos/vbox/internal/vagrant"
 	"github.com/spf13/cobra"
 )
@@ -28,9 +28,10 @@ var codeCmd = &cobra.Command{
 			if codeResume {
 				claudeArgs = append(claudeArgs, "--resume")
 			}
-			command := "npm install -g @anthropic-ai/claude-code --no-audit >/dev/null && claude " + shellQuoteArgs(claudeArgs)
+			command := dockerToolBootstrap("ripgrep git ca-certificates") +
+				" && npm install -g @anthropic-ai/claude-code --no-audit >/dev/null && claude " + shellQuoteArgs(claudeArgs)
 			fmt.Println("==> Launching Claude Code in Docker")
-			return docker.Run(docker.Options{
+			return container.Run(container.Options{
 				ProjectRoot: root,
 				Config:      cfg,
 				Image:       codeDockerImage,
@@ -84,6 +85,6 @@ if os.path.exists(cj):
 func init() {
 	codeCmd.Flags().BoolVarP(&codeResume, "resume", "r", false, "Resume the most recent conversation")
 	codeCmd.Flags().BoolVar(&codeDocker, "docker", false, "Launch in Docker instead of the VM")
-	codeCmd.Flags().StringVar(&codeDockerImage, "docker-image", docker.DefaultImage, "Docker image to use with --docker")
+	codeCmd.Flags().StringVar(&codeDockerImage, "docker-image", container.DefaultImage, "Docker image to use with --docker")
 	rootCmd.AddCommand(codeCmd)
 }

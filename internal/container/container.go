@@ -1,4 +1,4 @@
-package docker
+package container
 
 import (
 	"fmt"
@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/TomHoenderdos/vbox/internal/config"
+	"golang.org/x/term"
 )
 
 const DefaultImage = "node:22-bookworm"
@@ -16,6 +17,14 @@ type Options struct {
 	Config      *config.Config
 	Image       string
 	Command     string
+	Engine      string // "docker" (default) or "container"
+}
+
+func engineBinary(engine string) string {
+	if engine == "container" {
+		return "container"
+	}
+	return "docker"
 }
 
 func Run(opts Options) error {
@@ -24,17 +33,25 @@ func Run(opts Options) error {
 		image = DefaultImage
 	}
 
-	args := []string{"run", "--rm", "-it", "-w", "/workspace"}
+	args := []string{"run", "--rm"}
+	if stdinIsTerminal() {
+		args = append(args, "-it")
+	}
+	args = append(args, "-w", "/workspace")
 	args = append(args, "-v", opts.ProjectRoot+":/workspace")
 	args = append(args, configMounts()...)
 	args = append(args, portArgs(opts.Config)...)
 	args = append(args, image, "bash", "-lc", opts.Command)
 
-	cmd := exec.Command("docker", args...)
+	cmd := exec.Command(engineBinary(opts.Engine), args...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
+}
+
+func stdinIsTerminal() bool {
+	return term.IsTerminal(int(os.Stdin.Fd()))
 }
 
 func configMounts() []string {
