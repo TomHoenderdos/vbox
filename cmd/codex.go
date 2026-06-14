@@ -5,13 +5,14 @@ import (
 	"strings"
 
 	"github.com/TomHoenderdos/vbox/internal/config"
-	"github.com/TomHoenderdos/vbox/internal/docker"
+	"github.com/TomHoenderdos/vbox/internal/container"
 	"github.com/TomHoenderdos/vbox/internal/vagrant"
 	"github.com/spf13/cobra"
 )
 
-var codexDocker bool
-var codexDockerImage string
+var codexBackend string
+var codexImage string
+var codexResume bool
 
 var codexCmd = &cobra.Command{
 	Use:                "codex [args...]",
@@ -27,18 +28,26 @@ var codexCmd = &cobra.Command{
 			return err
 		}
 
-		filteredArgs, dockerMode, dockerImage := parseCodexRuntimeArgs(args)
-		if dockerMode {
-			command := "npm install -g @openai/codex --no-audit >/dev/null && codex"
-			if len(filteredArgs) > 0 {
-				command += " " + shellQuoteArgs(filteredArgs)
-			}
-			fmt.Println("==> Launching Codex CLI in Docker")
-			return docker.Run(docker.Options{
+		filteredArgs, backend, image, resume, err := parseCodexRuntimeArgs(args)
+		if err != nil {
+			return err
+		}
+		if err := preflightBackend(backend); err != nil {
+			return err
+		}
+		filteredArgs = codexResumeArgs(filteredArgs, resume)
+
+		if backend != BackendVM {
+			codexArgs := append([]string{"--dangerously-bypass-approvals-and-sandbox"}, filteredArgs...)
+			command := dockerToolBootstrap("ripgrep git ca-certificates") +
+				" && npm install -g @openai/codex --no-audit >/dev/null && codex " + shellQuoteArgs(codexArgs)
+			fmt.Printf("==> Launching Codex CLI in %s\n", engineFor(backend))
+			return container.Run(container.Options{
 				ProjectRoot: root,
 				Config:      cfg,
-				Image:       dockerImage,
+				Image:       image,
 				Command:     command,
+				Engine:      engineFor(backend),
 			})
 		}
 
@@ -60,30 +69,58 @@ func shellQuoteArgs(args []string) string {
 	return strings.Join(quoted, " ")
 }
 
-func parseCodexRuntimeArgs(args []string) ([]string, bool, string) {
-	dockerMode := codexDocker
-	dockerImage := codexDockerImage
+func dockerToolBootstrap(packages string) string {
+	return "export DEBIAN_FRONTEND=noninteractive; apt-get update >/dev/null && apt-get install -y " + packages + " >/dev/null"
+}
+
+func codexResumeArgs(args []string, resume bool) []string {
+	if !resume {
+		return args
+	}
+	return append([]string{"resume", "--last"}, args...)
+}
+
+func parseCodexRuntimeArgs(args []string) ([]string, Backend, string, bool, error) {
+	backendStr := codexBackend
+	image := codexImage
+	resume := codexResume
 	filtered := make([]string, 0, len(args))
 
 	for i := 0; i < len(args); i++ {
 		switch {
-		case args[i] == "--docker":
-			dockerMode = true
-		case args[i] == "--docker-image" && i+1 < len(args):
-			dockerImage = args[i+1]
+		case args[i] == "--docker" || args[i] == "--docker-image" || strings.HasPrefix(args[i], "--docker-image="):
+			return nil, BackendVM, "", false, fmt.Errorf("%s is no longer supported; use --backend docker", strings.SplitN(args[i], "=", 2)[0])
+		case args[i] == "--backend" && i+1 < len(args):
+			backendStr = args[i+1]
 			i++
-		case strings.HasPrefix(args[i], "--docker-image="):
-			dockerImage = strings.TrimPrefix(args[i], "--docker-image=")
+		case args[i] == "--backend":
+			return nil, BackendVM, "", false, fmt.Errorf("flag needs an argument: --backend")
+		case strings.HasPrefix(args[i], "--backend="):
+			backendStr = strings.TrimPrefix(args[i], "--backend=")
+		case args[i] == "--image" && i+1 < len(args):
+			image = args[i+1]
+			i++
+		case args[i] == "--image":
+			return nil, BackendVM, "", false, fmt.Errorf("flag needs an argument: --image")
+		case strings.HasPrefix(args[i], "--image="):
+			image = strings.TrimPrefix(args[i], "--image=")
+		case args[i] == "--resume" || args[i] == "-r":
+			resume = true
 		default:
 			filtered = append(filtered, args[i])
 		}
 	}
 
-	return filtered, dockerMode, dockerImage
+	backend, err := parseBackend(backendStr)
+	if err != nil {
+		return nil, BackendVM, "", false, err
+	}
+	return filtered, backend, image, resume, nil
 }
 
 func init() {
-	codexCmd.Flags().BoolVar(&codexDocker, "docker", false, "Launch in Docker instead of the VM")
-	codexCmd.Flags().StringVar(&codexDockerImage, "docker-image", docker.DefaultImage, "Docker image to use with --docker")
+	codexCmd.Flags().StringVar(&codexBackend, "backend", "vm", "Runtime backend: vm, docker, or container")
+	codexCmd.Flags().StringVar(&codexImage, "image", container.DefaultImage, "Container image for docker/container backends")
+	codexCmd.Flags().BoolVarP(&codexResume, "resume", "r", false, "Resume the most recent conversation")
 	rootCmd.AddCommand(codexCmd)
 }
