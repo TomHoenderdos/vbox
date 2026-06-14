@@ -53,15 +53,33 @@ vbox code
 vbox codex
 
 # Run either tool in Docker/OrbStack instead of a VM
-vbox code --docker
-vbox codex --docker
+vbox code --backend docker
+vbox codex --backend docker
+vbox codex --backend docker --resume
+
+# Run in an Apple Container (macOS only)
+vbox code --backend container
+vbox codex --backend container
 ```
 
 `vbox code` handles everything — syncs credentials from macOS Keychain, configures the VM, and drops you into Claude Code.
 
 `vbox codex` launches Codex CLI in the VM. If `~/.codex` exists on your host, generated Vagrantfiles sync it into the VM.
 
-Add `--docker` to run the tool in a disposable Docker container instead. This works with OrbStack locally because it uses the standard Docker CLI. The container mounts the project at `/workspace`, mounts existing `~/.claude`, `~/.claude.json`, `~/.codex`, and GitHub CLI config when present, and forwards the ports configured for the project.
+### Backends
+
+`code` and `codex` accept `--backend vm|docker|container` (default `vm`) and
+`--image <ref>` (default `node:22-bookworm`, used by the docker/container backends).
+
+- `vm` — Vagrant + Parallels (full VM; supports profiles, ports, USB).
+- `docker` — Docker container (works with OrbStack/Docker Desktop locally).
+- `container` — Apple Container (macOS only). Note: the macOS local-network
+  firewall can block published ports, and macOS 26.1 has a known port-forwarding
+  bug (apple/container#919).
+
+The container backends mount the project at `/workspace`, mount existing
+`~/.claude`, `~/.claude.json`, `~/.codex`, and GitHub CLI config when present,
+install basic agent tooling (e.g. ripgrep), and forward the project's ports.
 
 ## Commands
 
@@ -72,9 +90,11 @@ Add `--docker` to run the tool in a disposable Docker container instead. This wo
 | `vbox down` | Stop the VM |
 | `vbox down -v` | Stop and destroy the VM |
 | `vbox code` | Launch Claude Code in the VM |
-| `vbox code --docker` | Launch Claude Code in Docker |
+| `vbox code --backend docker` | Launch Claude Code in Docker |
+| `vbox code --backend container` | Launch Claude Code in an Apple Container |
 | `vbox codex [args...]` | Launch Codex CLI in the VM |
-| `vbox codex --docker [args...]` | Launch Codex CLI in Docker |
+| `vbox codex --backend docker [args...]` | Launch Codex CLI in Docker |
+| `vbox codex --resume` | Resume the most recent Codex conversation |
 | `vbox ssh` | Shell into the VM |
 | `vbox exec <cmd>` | Run a command in the VM |
 | `vbox ps` | Interactive dashboard — manage all VMs |
@@ -136,7 +156,7 @@ Language versions are read from `.tool-versions` (asdf). Profiles are composable
 3. `vbox up` starts the VM with bidirectional file sync via Parallels shared folders — changes on either side appear instantly
 4. `vbox code` syncs Claude credentials from macOS Keychain, patches VM settings, and launches Claude Code — all in one SSH session
 5. `vbox codex` launches Codex CLI from `/vagrant`; generated Vagrantfiles sync host `~/.codex` when present
-6. `--docker` runs Claude or Codex in a disposable `node:22-bookworm` container mounted at `/workspace`; override with `--docker-image`
+6. `--backend docker` or `--backend container` runs Claude or Codex in a disposable container (default image `node:22-bookworm`, override with `--image`) mounted at `/workspace`; use `--backend vm` (the default) for full VM isolation
 7. Git works natively on both sides — branch switches, commits, and pushes from the VM all just work (SSH agent forwarding is enabled)
 
 ## Adding custom profiles
