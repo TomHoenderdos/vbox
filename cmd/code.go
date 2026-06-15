@@ -36,8 +36,10 @@ var codeCmd = &cobra.Command{
 			if codeResume {
 				claudeArgs = append(claudeArgs, "--resume")
 			}
+			// Container runs as root; IS_SANDBOX=1 lets claude accept
+			// --dangerously-skip-permissions as root (the container is the sandbox).
 			command := dockerToolBootstrap("ripgrep git ca-certificates") +
-				" && npm install -g @anthropic-ai/claude-code --no-audit >/dev/null && claude " + shellQuoteArgs(claudeArgs)
+				" && npm install -g @anthropic-ai/claude-code --no-audit >/dev/null && IS_SANDBOX=1 claude " + shellQuoteArgs(claudeArgs)
 			fmt.Printf("==> Launching Claude Code in %s\n", engineFor(backend))
 			return container.Run(container.Options{
 				ProjectRoot: root,
